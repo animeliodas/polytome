@@ -151,8 +151,10 @@ def _apply_once(ws: Workspace, target: str, rules: dict | None, backup: bool) ->
         atomic_write(files[n], "\n\n".join(paras) if target == "translation" else "\n".join(paras),
                      encoding="utf-8-sig")
         if target == "translation":
-            st = ws.load_state(n)
-            if st and not st.get("imported"):
+            # Есть сохранённое посегментное состояние (свой перевод или уже правленный чужой) — пометить
+            # убранное, иначе следующая правка главы вернёт эти строки в текст.
+            st = ws.load_state(n) if ws.state_path(n).is_file() else None
+            if st:
                 # посегментное состояние: убранные абзацы помечаем, чтобы проверки не считали их пропуском
                 keep = set(paras)
                 for s in st["segments"]:

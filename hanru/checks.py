@@ -574,17 +574,32 @@ def check_chapter(state: dict, gl: Glossary, include_noisy: bool = False) -> dic
     """Отчёт по главе: {seg_id: [issues]} + сводка."""
     stems = glossary_stems(gl)
     per: dict[int, list[dict]] = {}
-    for s in state["segments"]:
+    segs = _bead_view(state["segments"])
+    for s in segs:
         iss = check_segment(s["src"], s.get("tr"), gl.relevant(s["src"]), stems, gl)
         if not include_noisy:
             iss = [i for i in iss if i["type"] not in NOISY]
         if iss:
             per[s["id"]] = iss
-    for sid, iss in chapter_level_issues(state["segments"]).items():
+    for sid, iss in chapter_level_issues(segs).items():
         per.setdefault(sid, []).extend(iss)
     hard = sum(1 for v in per.values() for i in v if i["level"] == "hard")
     soft = sum(1 for v in per.values() for i in v if i["level"] == "soft")
     return {"issues": per, "hard": hard, "soft": soft, "segments": len(state["segments"])}
+
+
+def _bead_view(segments: list[dict]) -> list[dict]:
+    """Сегменты для проверок: продолжения (cont — абзац оригинала разбит в переводе на несколько) склеиваются с
+    головой, убранные очисткой (dropped) пропускаются. Для своего перевода (1:1) ничего не меняется."""
+    out: list[dict] = []
+    for s in segments:
+        if s.get("dropped"):
+            continue
+        if s.get("cont") and out:
+            out[-1] = {**out[-1], "tr": ((out[-1].get("tr") or "") + " " + (s.get("tr") or "")).strip()}
+        else:
+            out.append(s)
+    return out
 
 
 def chapter_level_issues(segs: list[dict]) -> dict[int, list[dict]]:

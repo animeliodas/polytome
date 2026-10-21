@@ -40,6 +40,7 @@ def read_json(path: Path, default=None):
         path.replace(path.with_name(path.name + f".corrupt-{int(time.time())}"))
         return default
 
+LEGACY_PLACEHOLDER = "(склеено с предыдущим абзацем)"  # писала в текст версия до 0.3.1 (JOURNAL.md)
 META_DIR = ".hanru"          # служебная папка книги
 LEGACY_META_DIR = ".codek"   # так она называлась до переименования проекта
 
@@ -202,16 +203,35 @@ class Workspace:
     def load_state(self, n: int) -> dict | None:
         st = read_json(self.state_path(n))
         if st is not None:
+            for seg in st.get("segments", []):
+                if seg.get("tr") == LEGACY_PLACEHOLDER:  # артефакт старого выравнивания, а не текст перевода
+                    seg["tr"], seg["dropped"] = "", True
             return st
-        # Перевод есть, а состояния нет (импорт чужого перевода) — выравниваем по абзацам, если совпадает число.
+        # Перевод есть, а состояния нет (чужой перевод, импорт, ручная правка) — выравниваем с оригиналом.
+        # Единица — абзац ПЕРЕВОДА: сохранение после правок повторяет файл абзац в абзац (ничего не склеивается
+        # и не вставляется). Абзацы оригинала без перевода прицепляются к соседнему сегменту как контекст.
         if self.is_translated(n):
             src = self.source_paragraphs(n)
             tr = split_paragraphs(self.target_path(n).read_text(encoding="utf-8-sig"))
-            from .align import align
-            aligned = align(src, tr)
-            return {"chapter": n, "imported": True, "auto_aligned": len(src) != len(tr),
-                    "segments": [{"id": i + 1, "src": s, "tr": t or "(склеено с предыдущим абзацем)",
-                                  "history": []} for i, (s, t) in enumerate(zip(src, aligned))]}
+            from .align import align_beads
+            segs: list[dict] = []
+            orphan = ""
+            for i0, i1, j0, j1 in align_beads(src, tr):
+                s_text = "\n".join(src[i0:i1])
+                if j1 == j0:  # 1–0: абзаца нет в переводе (пропуск или убран очисткой)
+                    if segs:
+                        segs[-1]["src"] = "\n".join(x for x in (segs[-1]["src"], s_text) if x)
+                    else:
+                        orphan = "\n".join(x for x in (orphan, s_text) if x)
+                    continue
+                for k, j in enumerate(range(j0, j1)):
+                    seg = {"id": len(segs) + 1, "src": "", "tr": tr[j], "history": []}
+                    if k == 0 and (s_text or orphan):
+                        seg["src"], orphan = "\n".join(x for x in (orphan, s_text) if x), ""
+                    elif segs:
+                        seg["cont"] = True  # продолжение перевода предыдущего абзаца оригинала
+                    segs.append(seg)
+            return {"chapter": n, "imported": True, "auto_aligned": len(src) != len(tr), "segments": segs}
         return None
 
     def save_state(self, n: int, state: dict, write_text: bool = True):
@@ -219,14 +239,16 @@ class Workspace:
             self.state_dir.mkdir(parents=True, exist_ok=True)
             state["chapter"] = n
             state["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-            src_joined = "\n".join(s["src"] for s in state["segments"])
+            src_joined = "\n".join(s["src"] for s in state["segments"] if s["src"])
             state["source_hash"] = hashlib.sha1(src_joined.encode("utf-8")).hexdigest()[:12]
-            final = write_text and all(s.get("tr") for s in state["segments"])
+            final = write_text and all(s.get("tr") or s.get("dropped") for s in state["segments"])
             if final:
                 state["stage"] = "done"
                 # Сначала текст главы, потом состояние «done»: сбой между ними оставит состояние
                 # незавершённым — глава просто досохранится при следующем запуске.
-                text = "\n\n".join(s["tr"].strip() for s in state["segments"])
+                # Убранное очисткой (dropped) в текст не возвращается.
+                text = "\n\n".join(s["tr"].strip() for s in state["segments"]
+                                     if s.get("tr") and not s.get("dropped"))
                 atomic_write(self.target_path(n), text, encoding="utf-8-sig")
             atomic_write(self.state_path(n), json.dumps(state, ensure_ascii=False, indent=1))
 

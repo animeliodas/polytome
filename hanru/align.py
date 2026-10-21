@@ -1,7 +1,7 @@
 """Выравнивание абзацев оригинала и готового перевода (Gale–Church по длинам).
 
 Нужно, чтобы импортировать чужой перевод (Hermes, человек), где абзацы разбиты/склеены иначе.
-Переходы: 1–1, 1–2, 1–3 (переводчик разбил абзац), 2–1 (склеил), 1–0 (пропуск).
+Переходы: 1–1, 1–2, 1–3 (переводчик разбил абзац), 2–1 (склеил), 1–0 (пропуск), 0–1 (лишний абзац).
 """
 from __future__ import annotations
 
@@ -20,11 +20,12 @@ def _tlen(s: str) -> float:
     return float(max(1, len(re.sub(r"\s", "", s))))
 
 
-def align(src: list[str], tgt: list[str]) -> list[str]:
-    """→ список той же длины, что src: перевод для каждого абзаца оригинала ('' если склеен с предыдущим)."""
-    if len(src) == len(tgt):
-        return list(tgt)
+def align_beads(src: list[str], tgt: list[str]) -> list[tuple[int, int, int, int]]:
+    """Выравнивание группами: [(i0, i1, j0, j1)] — абзацы оригинала src[i0:i1] переведены абзацами tgt[j0:j1].
+    Группы идут подряд и покрывают оба списка целиком; j0 == j1 — у абзаца оригинала нет перевода."""
     n, m = len(src), len(tgt)
+    if n == m:
+        return [(i, i + 1, i, i + 1) for i in range(n)]
     sl = [_slen(s) for s in src]
     tl = [_tlen(t) for t in tgt]
     ratio = sum(tl) / max(1.0, sum(sl))
@@ -32,10 +33,10 @@ def align(src: list[str], tgt: list[str]) -> list[str]:
     cost = [[INF] * (m + 1) for _ in range(n + 1)]
     back: list[list[tuple[int, int] | None]] = [[None] * (m + 1) for _ in range(n + 1)]
     cost[0][0] = 0.0
-    moves = [(1, 1, 0.0), (1, 2, 1.2), (1, 3, 2.5), (2, 1, 1.5), (1, 0, 6.0)]
+    moves = [(1, 1, 0.0), (1, 2, 1.2), (1, 3, 2.5), (2, 1, 1.5), (1, 0, 6.0), (0, 1, 6.0)]
 
     def mcost(a: float, b: float) -> float:
-        if b == 0:
+        if a == 0 or b == 0:
             return 0.0
         return abs(math.log((b + 5) / (a * ratio + 5))) * 3
 
@@ -52,17 +53,24 @@ def align(src: list[str], tgt: list[str]) -> list[str]:
                 if c < cost[ni][nj]:
                     cost[ni][nj] = c
                     back[ni][nj] = (di, dj)
-    out = [""] * n
+    beads = []
     i, j = n, m
     while i > 0 or j > 0:
-        mv = back[i][j]
-        if mv is None:
-            break
-        di, dj = mv
-        text = " ".join(tgt[j - dj:j])
-        if di == 1:
-            out[i - 1] = text
-        else:  # 2–1: склеенный перевод относим к первому абзацу
-            out[i - 2], out[i - 1] = text, ""
+        di, dj = back[i][j]
+        beads.append((i - di, i, j - dj, j))
         i, j = i - di, j - dj
+    return beads[::-1]
+
+
+def align(src: list[str], tgt: list[str]) -> list[str]:
+    """→ список той же длины, что src: перевод для каждого абзаца оригинала ('' — склеен с предыдущим или нет
+    перевода). Для чтения и оценки; для правки готового перевода — align_beads (абзацы не склеиваются)."""
+    out = [""] * len(src)
+    for i0, i1, j0, j1 in align_beads(src, tgt):
+        text = " ".join(tgt[j0:j1])
+        if i1 > i0:
+            out[i0] = text
+        elif out and text:  # 0–1: лишний абзац перевода — к предыдущему абзацу оригинала
+            k = max(0, i0 - 1)
+            out[k] = (out[k] + " " + text).strip()
     return out

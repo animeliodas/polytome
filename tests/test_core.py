@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from hanru.agent import parse_text_calls  # noqa: E402
 from hanru.align import align  # noqa: E402
-from hanru.checks import check_segment, find_chinese_names  # noqa: E402
+from hanru.checks import check_chapter, check_segment, find_chinese_names  # noqa: E402
 from hanru.engine import parse_json_lenient, parse_numbered  # noqa: E402
 from hanru.glossary import Glossary, word_stem  # noqa: E402
 from hanru.palladius import transcribe  # noqa: E402
@@ -98,6 +98,65 @@ def test_align():
     tgt = ["Глава 1", "Ли Сяобай улыбнулся и сказал:", "— Как ты? У меня всё хорошо, спасибо за заботу.", "Ян Синья кивнула."]
     a = align(src, tgt)
     assert len(a) == 3 and "спасибо" in a[1] and a[2] == "Ян Синья кивнула.", a
+
+
+def _imported_book(src: list[str], tr: list[str]):
+    from hanru.workspace import Workspace
+    ws = Workspace(Path(tempfile.mkdtemp()) / "book")
+    ws.init()
+    (ws.source_dir / "Глава 1.txt").write_text("\n".join(src), encoding="utf-8")
+    ws.target_path(1).write_text("\n\n".join(tr), encoding="utf-8")
+    return ws
+
+
+def test_imported_translation_roundtrip():
+    """Чужой перевод с другим числом абзацев: правка одного абзаца не склеивает и не вставляет абзацы."""
+    from hanru.workspace import split_paragraphs
+    src = ["第一章", "黎小白笑了笑說道：「你好嗎？我很好，謝謝你的關心。」", "楊心雅點點頭。", "她走了。"]
+    tr = ["Глава 1", "Ли Сяобай улыбнулся и сказал:", "— Как ты? У меня всё хорошо, спасибо за заботу.",
+          "Ян Синья кивнул.", "Она ушла."]  # абзац 2 переводчик разбил на два
+    ws = _imported_book(src, tr)
+    st = ws.load_state(1)
+    assert [s["tr"] for s in st["segments"]] == tr, st["segments"]
+    assert "(склеено" not in str(st)
+    seg = next(s for s in st["segments"] if s["tr"] == "Ян Синья кивнул.")
+    seg["tr"] = "Ян Синья кивнула."
+    st["stage"] = "done"
+    ws.save_state(1, st)
+    out = split_paragraphs(ws.target_path(1).read_text(encoding="utf-8-sig"))
+    assert out == tr[:3] + ["Ян Синья кивнула.", "Она ушла."], out
+    assert ws.load_state(1)["segments"][2].get("cont")  # продолжение разбитого абзаца
+    rep = check_chapter(ws.load_state(1), Glossary(ws.glossary_path))
+    assert rep["hard"] == 0, rep
+
+
+def test_legacy_placeholder_and_dropped_not_written():
+    import json as _json
+    from hanru.workspace import split_paragraphs
+    ws = _imported_book(["第一章", "他笑了。", "她哭了。"], ["Глава 1", "Он засмеялся.", "Она заплакала."])
+    st = ws.load_state(1)
+    st["segments"][1]["tr"] = "(склеено с предыдущим абзацем)"  # состояние, записанное версией 0.3.0
+    ws.state_path(1).parent.mkdir(parents=True, exist_ok=True)
+    ws.state_path(1).write_text(_json.dumps(st, ensure_ascii=False), encoding="utf-8")
+    st = ws.load_state(1)
+    st["segments"][2]["dropped"] = True  # убрано очисткой
+    ws.save_state(1, st)
+    assert split_paragraphs(ws.target_path(1).read_text(encoding="utf-8-sig")) == ["Глава 1"]
+
+
+def test_cleanup_then_edit_keeps_lines_removed():
+    from hanru import cleanup
+    from hanru.workspace import split_paragraphs
+    src = ["第一章", "他笑了。", "求月票！", "她哭了。"]
+    tr = ["Глава 1", "Он засмеялся.", "Не забудьте проголосовать месячным билетом!", "Она заплакала."]
+    ws = _imported_book(src, tr)
+    st = ws.load_state(1)
+    ws.save_state(1, st)  # состояние уже сохранено (например, после прошлой правки)
+    cleanup.apply(ws, "translation", {**cleanup.load_rules(ws), "drop_lines": [tr[2]], "author_tail": False},
+                  backup=False)
+    ws.set_segment(1, 2, "Он громко засмеялся.", by="test")
+    out = split_paragraphs(ws.target_path(1).read_text(encoding="utf-8-sig"))
+    assert out == ["Глава 1", "Он громко засмеялся.", "Она заплакала."], out
 
 
 if __name__ == "__main__":
