@@ -10,8 +10,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from hanru.checks import gender_votes  # noqa: E402,F401
-from hanru.workspace import chapter_number, split_paragraphs  # noqa: E402
+from polytome.checks import gender_votes  # noqa: E402,F401
+from polytome.workspace import chapter_number, split_paragraphs  # noqa: E402
 
 F = (r"сестр\w*|сестрёнк\w*|сестренк\w*|мам\w*|мать|матер\w*|доч\w*|жена|жены|жене|жену|девушк\w*|девочк\w*|"
      r"госпож\w*|мисс|тёт\w*|тет[яеи]\w*|бабушк\w*|певиц\w*|актрис\w*|учительниц\w*|ведущая|ведущей|хозяйк\w*|"

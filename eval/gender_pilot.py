@@ -9,11 +9,11 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from hanru.checks import gender_votes  # noqa: E402
-from hanru.config import Config  # noqa: E402
-from hanru.engine import Engine  # noqa: E402
-from hanru.llm import LLMClient  # noqa: E402
-from hanru.workspace import Workspace  # noqa: E402
+from polytome.checks import gender_votes  # noqa: E402
+from polytome.config import Config  # noqa: E402
+from polytome.engine import Engine  # noqa: E402
+from polytome.llm import LLMClient  # noqa: E402
+from polytome.workspace import Workspace  # noqa: E402
 
 book, chs = sys.argv[1], [int(x) for x in sys.argv[2].split(",")]
 cfg = Config.load()

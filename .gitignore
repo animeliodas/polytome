@@ -5,10 +5,10 @@ __pycache__/
 build/
 dist/
 
-# личные настройки и ключи (мастер настройки — hanru setup)
-hanru.json
+# личные настройки и ключи (мастер настройки — polytome setup)
+polytome.json
 secrets.json
-.hanru_history
+.polytome_history
 Creating a transfer protocol.txt
 
 # тестовые книги и результаты замеров (чужие тексты — не публикуются)
@@ -16,3 +16,4 @@ books/
 eval/out/
 *.log
 eval/COMPARE.md
+.scratch/

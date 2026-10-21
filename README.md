@@ -1,117 +1,139 @@
-# Hanru — переводчик книг на основе LLM
+# Polytome — an LLM book translator that checks its own work
 
-Hanru переводит книги (EPUB, TXT, папки глав; лучше всего — китайские веб-новеллы) на русский и сам
-следит за качеством: имена по Палладию, пол персонажей, числа, пропуски и иероглифы проверяет **код**, а
-не модель. Работает с любой моделью — облачной или на вашем ПК.
+**English** · [Русский](README.ru.md)
 
-Три способа работы:
-- **Готовые команды** — предсказуемо и экономно: `hanru new` → `hanru run` → `hanru export`.
-- **Диалог с агентом** (как Claude Code): «в главе 7 героиня говорит о себе в мужском роде — исправь».
-- **Внутри приложения** — API на Python, Android (Chaquopy) или JSON-RPC: [docs/INTEGRATION.md](docs/INTEGRATION.md).
+Polytome translates whole books (EPUB, TXT, folders of chapters) **from any language into any language** and
+watches the quality itself: names, character gender, numbers, omissions and leftovers of the original are checked
+by **code**, not by the model. It works with any model — in the cloud or on your own computer.
 
-## Быстрый старт
+It started as a translator of Chinese web novels, so that pair is the most polished: Chinese names are
+transcribed deterministically (Hanyu Pinyin for Latin-script languages, Palladius for Russian), and character
+genders are verified against evidence in the original.
+
+Three ways to use it:
+- **Ready-made commands** — predictable and cheap: `polytome new` → `polytome run` → `polytome export`.
+- **Chat with an agent** (like Claude Code): "in chapter 7 the heroine speaks about herself in the masculine — fix it".
+- **Inside an app** — a Python API, Android (Chaquopy) or JSON-RPC: [docs/INTEGRATION.md](docs/INTEGRATION.md).
+
+## Quick start
 
 ```
-install.cmd                                   # один раз: окружение и команда hanru
-hanru setup                                   # провайдер → ключ → модели → профиль
-hanru new "D:\Загрузки\книга.epub"            # создать книгу (главы, обложка, автор, оценка токенов)
-hanru run "D:\Загрузки\книга" --export epub   # перевести и собрать EPUB
+install.cmd                                      # once (Windows): environment and the polytome command
+polytome setup                                   # provider → key → models → profile
+polytome new "D:\Downloads\book.epub" --to en    # create a book (chapters, cover, author, token estimate)
+polytome run "D:\Downloads\book" --export epub   # translate and build an EPUB
 ```
-Все сценарии с примерами: **[docs/SCENARIOS.md](docs/SCENARIOS.md)** (длинный роман в фоне, продолжение после
-сбоя, экономия токенов, локальные модели, проверка чужого перевода, аудиокнига, Hermes).
+On Linux/macOS: `python -m venv .venv && .venv/bin/pip install -e .`, then the same commands.
+All scenarios with examples: **[docs/SCENARIOS.md](docs/SCENARIOS.md)** (a long novel in the background, resuming
+after a crash, saving tokens, local models, checking someone else's translation, audiobooks, Hermes).
 
-## Команды
+## Languages
 
-| команда | что делает |
+```
+polytome languages                         # supported languages and which checks exist for a pair
+polytome new book.epub --to es             # reading language; the source language is detected
+polytome setup --to en                     # default reading language for new books
+```
+| check | pairs |
 |---|---|
-| `hanru setup` / `hanru doctor` | настроить провайдеров и модели / проверить связь и ключи |
-| `hanru new <epub\|txt\|папка>` | создать книгу |
-| `hanru run <книга> [-c 1-50] [--profile economy] [--background] [--export epub]` | перевести |
-| `hanru status <книга> [--json\|--watch]` | прогресс, ETA, токены (без LLM) |
-| `hanru stop` / `hanru continue <книга>` | мягко остановить / продолжить после сбоя или остановки |
-| `hanru estimate <книга>` | токены и время по всем профилям |
-| `hanru audit <книга> [--fix]` | проверить перевод (свой или чужой) без LLM; починить найденное |
-| `hanru export <книга> --format epub\|fb2\|txt\|all` | собрать книгу |
-| `hanru profiles [--set economy [--book <книга>]]` | профили качества/экономии |
-| `hanru models [провайдер]` | доступные модели |
-| `hanru <книга>` / `hanru ask <книга> "задача"` | диалог с агентом / задача одной фразой |
-| `hanru integrate hermes` | установить скил для Hermes |
-| `hanru mcp <книга>` | MCP-сервер для любых агентов |
+| omissions, truncated paragraphs, numbers, duplicated/shifted paragraphs, glossary contract | all |
+| leftovers of the original script (hanzi, kana, hangul, Cyrillic…) | scripts differ |
+| Chinese names: deterministic transcription and misspelled-variant detection | Chinese → Latin-script languages (pinyin), Chinese → Russian (Palladius) |
+| character gender from evidence in the original (他/她, kinship) | Chinese → any |
+| grammatical gender of characters, "numbers as digits" | → Russian (morphology) |
 
-## Профили: качество или экономия
+Any other ISO 639-1 code works too — the model gets it as the language name. Prompts for Russian output are tuned
+and measured; for every other target Polytome uses English prompts with language-specific rules (pinyin and
+xianxia terms for Chinese → English, Hepburn for Japanese, dialogue punctuation of the target language…).
 
-| профиль | переводчик | рецензент | для кого |
+## Commands
+
+| command | what it does |
+|---|---|
+| `polytome setup` / `polytome doctor` | configure providers and models / check connection and keys |
+| `polytome new <epub\|txt\|folder> [--to en] [--from zh]` | create a book |
+| `polytome run <book> [-c 1-50] [--profile economy] [--background] [--export epub]` | translate |
+| `polytome status <book> [--json\|--watch]` | progress, ETA, tokens (no LLM) |
+| `polytome stop` / `polytome continue <book>` | stop gently / continue after a crash or a stop |
+| `polytome estimate <book>` | tokens and time for every profile |
+| `polytome audit <book> [--fix]` | check a translation (own or someone else's) without LLM; repair what was found |
+| `polytome export <book> --format epub\|fb2\|txt\|all` | build the book |
+| `polytome profiles [--set economy [--book <book>]]` | quality/economy profiles |
+| `polytome models [provider]` / `polytome languages` | available models / languages |
+| `polytome <book>` / `polytome ask <book> "task"` | chat with the agent / a one-sentence task |
+| `polytome integrate hermes` | install the Hermes skill |
+| `polytome mcp <book>` / `polytome serve` | MCP server for agents / JSON-RPC API for apps |
+
+## Profiles: quality or economy
+
+| profile | translator | reviewer | for |
 |---|---|---|---|
-| `quality` | сильная модель с полным рассуждением | вся глава | максимум качества, токены не важны |
-| `balanced` | сильная модель без долгих рассуждений | вся глава | по умолчанию |
-| `economy` | быстрая модель, крупные батчи | только места с замечаниями | меньше токенов, дольше ждать |
-| `local` | модель на вашем ПК | места с замечаниями | бесплатно и приватно |
+| `quality` | strong model with full reasoning | whole chapter | maximum quality, tokens don't matter |
+| `balanced` | strong model without long reasoning | whole chapter | default |
+| `economy` | fast model, large batches | only where issues were found | fewer tokens, longer wait |
+| `local` | a model on your computer | where issues were found | free and private |
 
-Профиль задаётся глобально (`hanru profiles --set`), для книги (`--book`) или на один запуск (`--profile`).
+The profile is set globally (`polytome profiles --set`), per book (`--book`) or for one run (`--profile`).
 
-## Модели и провайдеры
+## Models and providers
 
-Провайдеры из коробки: Ollama Cloud, Ollama и LM Studio (локально), llama.cpp, vLLM, OpenRouter, OpenAI,
-Anthropic, Google Gemini, DeepSeek, Mistral, Groq, Together, AITunnel. Любой другой OpenAI-совместимый сервер —
-одной строкой в `hanru.json`.
+Out of the box: Ollama Cloud, Ollama and LM Studio (local), llama.cpp, vLLM, OpenRouter, OpenAI, Anthropic,
+Google Gemini, DeepSeek, Mistral, Groq, Together, AITunnel. Any other OpenAI-compatible server — one line in
+`polytome.json`.
 
-Модели раскладываются по **слотам**: `strong` (основной переводчик), `fast` (дешёвая), `agent` (диалог),
-`reviewer`, `extractor`, `local`. Мастер `hanru setup` подскажет варианты; без вопросов:
+Models are arranged in **slots**: `strong` (main translator), `fast` (cheap), `agent` (chat), `reviewer`,
+`extractor`, `local`. `polytome setup` suggests options; without questions:
 ```
-hanru setup --provider openrouter --key sk-... --strong <модель> --fast <модель> --profile economy
+polytome setup --provider openrouter --key sk-... --strong <model> --fast <model> --profile economy --to en
 ```
-Ключи хранятся в `secrets.json` (или переменных окружения), не в `hanru.json`. Модель без нативного
-tool-calling тоже работает — агент переключается на текстовый протокол сам.
+Keys are stored in `secrets.json` (or environment variables), not in `polytome.json`. A model without native
+tool-calling works too — the agent switches to a text protocol by itself.
 
-## Надёжность
+## Reliability
 
-- Прогресс сохраняется после каждого батча, запись атомарная: выключение ПК не портит файлы, `continue`
-  продолжает с места остановки. Проверено жёстким убийством процесса посреди перевода.
-- Длинные романы переводятся волнами по 25 глав: глоссарий и библия растут вместе с книгой.
-- Если провайдер недоступен, задача останавливается сама, а не сжигает книгу на ошибках.
-- Разорванные посреди фразы абзацы (частая беда скачанных текстов) склеиваются при импорте; сдвиг и
-  дубли абзацев ловятся проверкой главы. Проверено на романе в 100 глав (JOURNAL.md).
+- Progress is saved after every batch with atomic writes: a power cut does not corrupt files, `continue` resumes
+  where it stopped. Tested by killing the process in the middle of a translation.
+- Long novels are translated in waves of 25 chapters: the glossary and the bible grow with the book.
+- If the provider is down, the job stops itself instead of burning the book on errors.
+- Paragraphs broken mid-sentence (a common problem of downloaded texts) are joined on import; shifted and
+  duplicated paragraphs are caught by the chapter check. Tested on a 100-chapter novel (JOURNAL.md).
 
-## Качество: что проверяет код
+## Embedding in apps
 
-- **Имена**: транскрипция по Палладию (pypinyin), имя в переводе сверяется с иероглифами абзаца — «Су Чэнь»
-  вместо героя или «Синя» вместо «Синья» ловятся и чинятся.
-- **Пол**: улики из оригинала («X，Y的弟弟», 姐姐/哥哥, «名叫X的女子») против глоссария + морфология
-  («Шэнь Син улыбнулся» при героине).
-- **Числа** цифрами для аудиокниг («500 миллионов» → «500000000»), китайская пунктуация, пропуски,
-  обрезанные абзацы, остатки иероглифов.
-
-Правила, общие для всех книг, — в `hanru/STYLE.md` (свой вариант — `STYLE.md` рядом с `hanru.json`) (сейчас: аудиокнига, числа цифрами). Они важнее библии книги.
+```python
+from polytome import Polytome
+h = Polytome({"providers": {"openrouter": {"api_key": "sk-..."}}, "slots": {"strong": "openrouter:<model>"},
+              "target_lang": "en"})
+book = h.import_book("book.epub")["path"]
+h.translate(book, chapters="1-5", on_event=print)
+h.chapter(book, 1)          # {"source": [...], "translation": [...]} — paragraphs 1:1
+```
+The same for any language: `polytome serve` (JSON-RPC over stdin/stdout) or `call(method, json)` from Kotlin via
+Chaquopy. Methods, events, an Android example — [docs/INTEGRATION.md](docs/INTEGRATION.md).
 
 ## Hermes
 
 ```
-hanru integrate hermes
+polytome integrate hermes
 ```
-Копирует скил `hanru-translator` в Hermes и прописывает путь к Hanru. Дальше в Hermes: «переведи книгу
-D:\книга.epub». Hermes запустит перевод в фоне, будет следить за статусом (с учётом лимита ячейки 300 с),
-продолжит после сбоя и соберёт EPUB.
+Copies the `polytome-translator` skill into Hermes and sets the path to Polytome. Then in Hermes: "translate the
+book D:\book.epub into English". Hermes starts the translation in the background, watches the status (within the
+300 s cell limit), continues after a crash and builds the EPUB.
 
-## Встраивание в приложения
+## Interface language
 
-```python
-from hanru import Hanru
-h = Hanru({"providers": {"openrouter": {"api_key": "sk-..."}}, "slots": {"strong": "openrouter:<модель>"}})
-book = h.import_book("книга.epub")["path"]
-h.translate(book, chapters="1-5", on_event=print)
-h.chapter(book, 1)          # {"source": [...], "translation": [...]} — абзацы 1:1
-```
-То же для любых языков: `hanru serve` (JSON-RPC по stdin/stdout) или `call(method, json)` из Kotlin через
-Chaquopy. Методы, события, пример для Android — [docs/INTEGRATION.md](docs/INTEGRATION.md).
+CLI and API messages follow the system language: Russian on a Russian system, English otherwise. Force it with
+`POLYTOME_UI_LANG=en` or `ru`. Strings live in `polytome/locales/en.json`; `python tools/i18n_wrap.py check`
+shows untranslated ones.
 
-## Документация
+## Documentation
 
-- [docs/SCENARIOS.md](docs/SCENARIOS.md) — рецепты на все случаи;
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — как устроено;
-- [docs/INTEGRATION.md](docs/INTEGRATION.md) — API для приложений (Python, Android, JSON-RPC);
-- [docs/PROTOCOL.md](docs/PROTOCOL.md) — инструменты агента/MCP;
-- [JOURNAL.md](JOURNAL.md) — журнал экспериментов и замеров.
+- [docs/SCENARIOS.md](docs/SCENARIOS.md) — recipes for every case;
+- [docs/INTEGRATION.md](docs/INTEGRATION.md) — API for apps (Python, Android, JSON-RPC);
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — how it works;
+- [docs/PROTOCOL.md](docs/PROTOCOL.md) — agent/MCP tools;
+- [JOURNAL.md](JOURNAL.md) — development log and measurements (in Russian).
 
-## Лицензия
+## License
 
-GPL-3.0-or-later — см. [LICENSE](LICENSE). До 21.10.2026 проект назывался Codek.
+GPL-3.0-or-later — see [LICENSE](LICENSE). Former names of the project: Codek, then hanru.

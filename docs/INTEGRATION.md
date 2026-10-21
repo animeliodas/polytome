@@ -1,40 +1,44 @@
-# Встраивание Hanru в приложения
+# Embedding Polytome in apps
 
-Hanru можно вызывать четырьмя способами. Все работают поверх одного API (`hanru/api.py`), поэтому методы,
-параметры и события везде одинаковые.
+**English** · [Русский](INTEGRATION.ru.md)
 
-| способ | для кого | как |
+Polytome can be called in four ways. All of them sit on one API (`polytome/api.py`), so methods, parameters and
+events are the same everywhere.
+
+| way | for | how |
 |---|---|---|
-| Python | скрипты, боты, GUI на Python | `from hanru import Hanru` |
-| Android (Kotlin/Java) | читалки и другие мобильные приложения | Chaquopy: Python внутри APK, `call(method, json)` |
-| JSON-RPC по stdin/stdout | Electron, C#, Go, Rust, Kotlin desktop | `hanru serve` |
-| MCP | ИИ-агенты (Hermes, Claude Code) | `hanru mcp <книга>`, скил `hanru integrate hermes` |
+| Python | scripts, bots, Python GUIs | `from polytome import Polytome` |
+| Android (Kotlin/Java) | readers and other mobile apps | Chaquopy: Python inside the APK, `call(method, json)` |
+| JSON-RPC over stdin/stdout | Electron, C#, Go, Rust, Kotlin desktop | `polytome serve` |
+| MCP | AI agents (Hermes, Claude Code) | `polytome mcp <book>`, the `polytome integrate hermes` skill |
 
-Входы и выходы — JSON-совместимые словари. Книга задаётся путём к её папке (её возвращает `import_book`).
+Inputs and outputs are JSON-compatible dicts. A book is identified by the path to its folder (returned by
+`import_book`).
 
 ## Python
 
 ```python
-from hanru import Hanru
+from polytome import Polytome
 
-h = Hanru({                                   # конфиг целиком в памяти: на диск ничего не пишется
+h = Polytome({                                   # the whole config in memory: nothing is written to disk
     "providers": {"openrouter": {"api_key": "sk-..."}},
-    "slots": {"strong": "openrouter:<модель>", "fast": "openrouter:<модель>"},
+    "slots": {"strong": "openrouter:<model>", "fast": "openrouter:<model>"},
     "profile": "economy",
-}, home="/путь/к/рабочей/папке")              # там будут books/ и черновики
-# Hanru() без аргументов берёт конфиг CLI (hanru.json + secrets.json).
+    "target_lang": "en",                         # default reading language (otherwise — the system language)
+}, home="/path/to/working/folder")               # books/ and drafts go there
+# Polytome() without arguments uses the CLI config (polytome.json + secrets.json).
 
-book = h.import_book("D:/Загрузки/книга.epub")["path"]
-print(h.check())                               # {"ready": true, ...} — ключи и модели на месте
-h.translate(book, chapters="1-5", on_event=print)   # блокирует до конца; wait=False — в фоновом потоке
+book = h.import_book("D:/Downloads/book.epub", target_lang="es")["path"]   # the source language is detected
+print(h.check())                               # {"ready": true, ...} — keys and models are in place
+h.translate(book, chapters="1-5", on_event=print)   # blocks until done; wait=False — in a background thread
 page = h.chapter(book, 1)                      # {"source": [...], "translation": [...], "aligned": true}
-h.export(book, "epub")                         # {"path": ".../Название.epub", ...}
+h.export(book, "epub")                         # {"path": ".../Title.epub", ...}
 ```
 
-## Android (Kotlin) через Chaquopy
+## Android (Kotlin) via Chaquopy
 
-[Chaquopy](https://chaquo.com/chaquopy/) (MIT) встраивает Python в APK. Все зависимости Hanru написаны на
-чистом Python (httpx, pypinyin, pymorphy3), поэтому собираются без нативного кода.
+[Chaquopy](https://chaquo.com/chaquopy/) (MIT) embeds Python into an APK. All Polytome dependencies are pure
+Python (httpx, pypinyin, pymorphy3), so they build without native code.
 
 `app/build.gradle.kts`:
 ```kotlin
@@ -46,61 +50,60 @@ chaquopy {
     defaultConfig {
         version = "3.12"
         pip {
-            install("hanru")                              // с PyPI, после публикации
-            // install("../hanru/dist/hanru-0.3.0-py3-none-any.whl")  // или локальная сборка: python -m build
+            install("polytome")                              // from PyPI, once published
+            // install("../polytome/dist/polytome-0.4.0-py3-none-any.whl")  // or a local build: python -m build
         }
     }
 }
 ```
 
-Обёртка: весь обмен идёт JSON-строками, без возни с типами Python.
+A wrapper: everything goes as JSON strings, no fiddling with Python types.
 ```kotlin
-interface HanruListener { fun onEvent(json: String) }       // Python вызовет listener.onEvent(...)
+interface PolytomeListener { fun onEvent(json: String) }       // Python calls listener.onEvent(...)
 
-class HanruBridge(filesDir: File, configJson: String, listener: HanruListener) {
-    private val api: PyObject = Python.getInstance().getModule("hanru.api").get("Hanru")!!
-        .callAttr("from_json", configJson, filesDir.resolve("hanru").absolutePath, listener)
+class PolytomeBridge(filesDir: File, configJson: String, listener: PolytomeListener) {
+    private val api: PyObject = Python.getInstance().getModule("polytome.api").get("Polytome")!!
+        .callAttr("from_json", configJson, filesDir.resolve("polytome").absolutePath, listener)
 
-    /** Любой метод API: call("chapter", """{"book": "...", "n": 1}""") → {"ok": true, "result": ...} */
+    /** Any API method: call("chapter", """{"book": "...", "n": 1}""") → {"ok": true, "result": ...} */
     fun call(method: String, paramsJson: String = "{}"): JSONObject =
         JSONObject(api.callAttr("call", method, paramsJson).toString())
 }
 ```
 
-Правила для Android:
-- **Вызовы — не из UI-потока** (`Dispatchers.IO`). `call("translate")` и `call("resume")` сами уходят в фон
-  и сразу возвращают `{"started": true}`; прогресс приходит в `onEvent`, текущее состояние — `call("status")`.
-- **Долгий перевод держите в foreground-сервисе** (`foregroundServiceType="dataSync"`) с уведомлением о
-  прогрессе. Если система всё же убьёт процесс, ничего не теряется: прогресс сохраняется после каждого
-  батча, при следующем запуске `call("status")` покажет `"state": "interrupted"`, а `call("resume")` продолжит
-  с места остановки.
-- **Ключи** храните в Android Keystore / EncryptedSharedPreferences и передавайте в `configJson`
-  (`providers.<id>.api_key`). Hanru держит их только в памяти.
-- `cancel` — мягкая остановка: текущие батчи допишутся (секунды, до ~1 мин), событие `job_done` придёт с
-  полем `cancelled`.
+Rules for Android:
+- **Do not call from the UI thread** (`Dispatchers.IO`). `call("translate")` and `call("resume")` go to the
+  background by themselves and return `{"started": true}` immediately; progress arrives in `onEvent`, the current
+  state — `call("status")`.
+- **Keep a long translation in a foreground service** (`foregroundServiceType="dataSync"`) with a progress
+  notification. If the system kills the process anyway, nothing is lost: progress is saved after every batch; on
+  the next start `call("status")` shows `"state": "interrupted"` and `call("resume")` continues where it stopped.
+- **Keys** — keep them in Android Keystore / EncryptedSharedPreferences and pass them in `configJson`
+  (`providers.<id>.api_key`). Polytome keeps them in memory only.
+- `cancel` is a gentle stop: current batches finish (seconds, up to ~1 min), `job_done` arrives with `cancelled`.
 
-## JSON-RPC по stdin/stdout (`hanru serve`)
+## JSON-RPC over stdin/stdout (`polytome serve`)
 
 ```
-hanru serve --home D:/HanruData
+polytome serve --home D:/PolytomeData
 ```
-Одна строка — одно сообщение JSON-RPC 2.0:
+One line — one JSON-RPC 2.0 message:
 ```
-→ {"jsonrpc":"2.0","id":1,"method":"configure","params":{"config":{"providers":{"openrouter":{"api_key":"sk-..."}}},"home":"D:/HanruData"}}
+→ {"jsonrpc":"2.0","id":1,"method":"configure","params":{"config":{"providers":{"openrouter":{"api_key":"sk-..."}},"target_lang":"en"},"home":"D:/PolytomeData"}}
 ← {"jsonrpc":"2.0","id":1,"result":{"profile":"balanced",...}}
-→ {"jsonrpc":"2.0","id":2,"method":"import_book","params":{"source":"D:/книга.epub"}}
-← {"jsonrpc":"2.0","id":2,"result":{"path":"D:/HanruData/books/Книга","chapters_total":120,...}}
-→ {"jsonrpc":"2.0","id":3,"method":"translate","params":{"book":"D:/HanruData/books/Книга","chapters":"1-3"}}
+→ {"jsonrpc":"2.0","id":2,"method":"import_book","params":{"source":"D:/book.epub"}}
+← {"jsonrpc":"2.0","id":2,"result":{"path":"D:/PolytomeData/books/Book","chapters_total":120,"source_lang":"zh","target_lang":"en",...}}
+→ {"jsonrpc":"2.0","id":3,"method":"translate","params":{"book":"D:/PolytomeData/books/Book","chapters":"1-3"}}
 ← {"jsonrpc":"2.0","id":3,"result":{"started":true,"book":"...","chapters":3}}
 ← {"jsonrpc":"2.0","method":"event","params":{"ev":"chapter_done","book":"...","n":1,"report":{...}}}
 ```
-Ошибки: `{"error": {"code": -32000, "message": "...", "data": {"type": "HanruError"}}}`; неизвестный метод —
-`-32601`. Каждый запрос выполняется в своём потоке, поэтому ответы могут прийти не по порядку: сверяйте `id`.
+Errors: `{"error": {"code": -32000, "message": "...", "data": {"type": "PolytomeError"}}}`; an unknown method —
+`-32601`. Every request runs in its own thread, so replies may come out of order: match them by `id`.
 
 Node.js:
 ```js
 const { spawn } = require("child_process");
-const p = spawn("hanru", ["serve"]);
+const p = spawn("polytome", ["serve"]);
 let id = 0; const wait = new Map();
 require("readline").createInterface({ input: p.stdout }).on("line", (line) => {
   const m = JSON.parse(line);
@@ -112,73 +115,86 @@ const rpc = (method, params = {}) => new Promise((ok) => {
 });
 ```
 
-## Методы
+## Methods
 
-| метод | параметры | результат |
+| method | parameters | result |
 |---|---|---|
-| `version` | — | `{"hanru": "0.3.0", "api": 1}` |
-| `check` | `ping=false` | готовность: модель и ключ для каждой роли; `ping` — короткий запрос к моделям |
-| `providers` | — | каталог провайдеров: `id, title, local, needs_key, has_key, keys_url, suggest` |
-| `profiles` | — | `quality / balanced / economy / local` с описанием |
-| `models` | `provider` | модели провайдера (его `/models`) |
-| `config_summary` | — | профиль, модели по ролям, параметры движка |
-| `import_book` | `source, library?, title?, fix_breaks=false` | сведения о книге (+ `import`: отчёт импорта). EPUB, TXT или папка глав |
-| `books` | `library?` | книги в библиотеке (по умолчанию `<home>/books`) |
-| `book_info` | `book` | `title, original_title, author, source_lang, chapters_total, chapters_translated, cover, job` |
-| `chapters` | `book` | оглавление: `n, title, source_title, translated, partial` |
-| `chapter` | `book, n, which="both"` | `source[]`, `translation[]` (или `null`), `aligned` — абзацы 1:1 |
-| `estimate` | `book, chapters?, profile?` | токены и минуты на непереведённые главы |
-| `translate` | `book, chapters?, profile?, review=true, retranslate=false, prepare=true, export?, wait` | отчёт или `{"started": true}` |
-| `resume` | `book, wait` | продолжить прерванную задачу с теми же настройками |
+| `version` | — | `{"polytome": "0.4.0", "api": 1}` |
+| `check` | `ping=false` | readiness: a model and a key for every role; `ping` — a short request to the models |
+| `providers` | — | provider catalog: `id, title, local, needs_key, has_key, keys_url, suggest` |
+| `profiles` | — | `quality / balanced / economy / local` with descriptions |
+| `languages` | `source_lang="zh"` | languages for a picker: `code, name, native, script`, which checks exist for the pair (`name_system`, `gender_check`), `default` |
+| `models` | `provider` | the provider's models (its `/models`) |
+| `config_summary` | — | profile, models per role, engine parameters |
+| `import_book` | `source, library?, title?, fix_breaks=false, target_lang?, source_lang?` | book info (+ `import`: the import report). EPUB, TXT or a folder of chapters; the source language is detected from the text |
+| `set_languages` | `book, source_lang?, target_lang?, force=false` | change the target language (with translated chapters — only with `force`) |
+| `books` | `library?` | books in the library (default `<home>/books`) |
+| `book_info` | `book` | `title, original_title, author, source_lang, target_lang, chapters_total, chapters_translated, cover, job` |
+| `chapters` | `book` | table of contents: `n, title, source_title, translated, partial` |
+| `chapter` | `book, n, which="both"` | `source[]`, `translation[]` (or `null`), `aligned` — paragraphs 1:1 |
+| `estimate` | `book, chapters?, profile?` | tokens and minutes for untranslated chapters |
+| `translate` | `book, chapters?, profile?, review=true, retranslate=false, prepare=true, export?, wait` | report or `{"started": true}` |
+| `resume` | `book, wait` | continue an interrupted job with the same settings |
 | `cancel` | `book` | `{"stopping": true}` |
-| `status` | `book` | прогресс без LLM: `job.state` (`running / done / cancelled / interrupted / failed`), `done, left, eta_min, tokens_this_run` |
-| `translate_text` | `text, book?, source_lang="zh", profile?` | перевод фрагмента; с `book` — имена по глоссарию книги |
+| `status` | `book` | progress without LLM: `job.state` (`running / done / cancelled / interrupted / failed`), `done, left, eta_min, tokens_this_run` |
+| `translate_text` | `text, book?, source_lang?, target_lang?, profile?` | translate a fragment; with `book` — names by the book's glossary, without — the language is detected |
 | `export` | `book, fmt="epub"\|"fb2"\|"txt"\|"all", out?, chapters?` | `{"path", "chapters", "missing_total", ...}` |
 
-`chapters` везде принимает `"all"`, `"1-10,15"`, число или список чисел. Через `call()`/JSON-RPC `translate`
-и `resume` всегда работают в фоне (`wait=false`).
+`chapters` everywhere accepts `"all"`, `"1-10,15"`, a number or a list of numbers. Through `call()`/JSON-RPC
+`translate` and `resume` always run in the background (`wait=false`).
 
-## События
+## Events
 
-Каждое событие — словарь с полями `ev`, `book` (путь), `t` (unix-время) и своими полями:
+Every event is a dict with `ev`, `book` (path), `t` (unix time) and its own fields:
 
-| `ev` | поля | когда |
+| `ev` | fields | when |
 |---|---|---|
-| `prepare_start` / `prepare_done` | `report` (глоссарий, библия, конфликты пола) | новая книга: поиск имён и библия перед первым переводом |
-| `job_start` | `total, resumed` | начало перевода набора глав |
-| `extract_start` / `extract_done` | `chapters` / `added, pending` | поиск новых имён перед каждой волной (25 глав) |
-| `chapter_start` | `n, segments` | глава взята в работу |
-| `resume` | `n, done, total, stage` | глава продолжается с места остановки |
-| `batch_done` | `n, batch, batches` | готов батч главы (для прогресс-бара внутри главы) |
-| `repair` | `n, seg, why` | код нашёл проблему в абзаце и переводит его заново |
-| `chapter_done` | `n, report` (`complete, segments, hard_issues, review_fixes, seconds`) | глава готова и записана |
-| `chapter_cancelled` | `n, done, total` | остановлено; сохранено `done` абзацев |
-| `job_done` | `report` (`translated, failed, cancelled, HALTED, tokens, export`) | задача закончилась (в том числе остановкой) |
-| `job_error` | `error` | задача упала с исключением |
-| `log` | `msg` | служебное сообщение (провайдер недоступен, получен STOP…) |
+| `prepare_start` / `prepare_done` | `report` (glossary, bible, gender conflicts) | a new book: finding names and writing the bible before the first translation |
+| `job_start` | `total, resumed` | translation of a set of chapters starts |
+| `extract_start` / `extract_done` | `chapters` / `added, pending` | looking for new names before each wave (25 chapters) |
+| `chapter_start` | `n, segments` | a chapter is taken |
+| `resume` | `n, done, total, stage` | a chapter continues from where it stopped |
+| `batch_done` | `n, batch, batches` | a batch of the chapter is ready (for a progress bar inside the chapter) |
+| `repair` | `n, seg, why` | the code found a problem in a paragraph and translates it again |
+| `chapter_done` | `n, report` (`complete, segments, hard_issues, review_fixes, seconds`) | the chapter is done and written |
+| `chapter_cancelled` | `n, done, total` | stopped; `done` paragraphs saved |
+| `job_done` | `report` (`translated, failed, cancelled, HALTED, tokens, export`) | the job ended (including a stop) |
+| `job_error` | `error` | the job failed with an exception |
+| `log` | `msg` | a service message (provider unavailable, STOP received…) |
 
-`HALTED` в `job_done` — провайдер несколько раз подряд не ответил, задача остановилась сама, чтобы не жечь
-книгу на ошибках: проверьте ключ (`check`) и сделайте `resume`.
+`HALTED` in `job_done`: the provider failed several times in a row and the job stopped itself so as not to burn
+the book on errors — check the key (`check`) and `resume`.
 
-## Конфиг
+## Config
 
-Тот же, что у CLI (`hanru.json`), только может передаваться словарём:
+The same as the CLI's (`polytome.json`), but it can be passed as a dict:
 
 ```json
 {
   "profile": "economy",
   "providers": {"openrouter": {"api_key": "sk-..."},
-                "мой-сервер": {"base_url": "http://192.168.1.10:11434/v1", "local": true}},
-  "slots": {"strong": "openrouter:<модель>", "fast": "openrouter:<модель>", "local": "мой-сервер:qwen3:14b"},
+                "my-server": {"base_url": "http://192.168.1.10:11434/v1", "local": true}},
+  "slots": {"strong": "openrouter:<model>", "fast": "openrouter:<model>", "local": "my-server:qwen3:14b"},
   "parallel": 6,
-  "style_text": "свои общие правила перевода (иначе встроенный STYLE.md)"
+  "target_lang": "en",
+  "style": {"numbers": "auto"},
+  "style_text": "your own house rules for translation (otherwise the built-in styles/<language>.md)"
 }
 ```
-Слоты: `strong` (основной переводчик), `fast` (дешёвая), `reviewer`, `extractor`, `agent`, `local`. Какой слот
-какой роли достаётся, решает профиль (см. `profiles`).
+Slots: `strong` (main translator), `fast` (cheap), `reviewer`, `extractor`, `agent`, `local`. Which slot serves
+which role is decided by the profile (see `profiles`). `style.numbers`: `digits` | `natural` | `auto` (Russian —
+digits, other languages — as usual in that language).
 
-## Совместная работа с CLI и Hermes
+## Languages
 
-Папка книги общая: книгу, начатую в приложении, можно продолжить командой `hanru continue <книга>` и наоборот.
-Одновременно книгу переводит только один процесс: `translate` вернёт ошибку, если над ней уже работает
-другой (CLI, Hermes, другой экземпляр). `cancel` остановит и чужой процесс через файл `.hanru/STOP`.
+Translation works from any language to any language: the source language is detected from the text (or
+`source_lang`), the reading language is the book's `target_lang` (default — from the config, otherwise the system
+language). A language picker in an app — the `languages` method. API messages (`error.message`) follow the system
+language (English or Russian); an app should rather show its own texts by `error.type`. Force it with the
+`POLYTOME_UI_LANG=en|ru` environment variable.
+
+## Working together with the CLI and Hermes
+
+The book folder is shared: a book started in an app can be continued with `polytome continue <book>` and vice
+versa. Only one process translates a book at a time: `translate` returns an error if another one (CLI, Hermes,
+another instance) is working on it. `cancel` also stops another process via the `.polytome/STOP` file.

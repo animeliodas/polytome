@@ -11,10 +11,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from hanru.config import Config  # noqa: E402
-from hanru.engine import Engine  # noqa: E402
-from hanru.llm import LLMClient  # noqa: E402
-from hanru.workspace import Workspace  # noqa: E402
+from polytome.config import Config  # noqa: E402
+from polytome.engine import Engine  # noqa: E402
+from polytome.llm import LLMClient  # noqa: E402
+from polytome.workspace import Workspace  # noqa: E402
 
 ws_path, chapter, models = sys.argv[1], int(sys.argv[2]), sys.argv[3].split(",")
 review = "--review" in sys.argv

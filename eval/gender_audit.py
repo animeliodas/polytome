@@ -1,7 +1,7 @@
 """Аудит рода персонажей в переводе: модели-аудиторы ищут ошибки пола (глаголы/прилагательные/местоимения).
 
 python eval/gender_audit.py <workspace> <главы> <аудитор1,аудитор2> <метка>=<шаблон пути с {n}> ...
-Пример: ... books/flower 1-5 ollama-cloud:kimi-k3,ollama-cloud:glm-5.3 hanru=books/flower/Перевод/Глава {n}.txt
+Пример: ... books/flower 1-5 ollama-cloud:kimi-k3,ollama-cloud:glm-5.3 polytome=books/flower/Перевод/Глава {n}.txt
 Ошибка засчитывается, если её нашли ОБА аудитора (пересечение по номеру абзаца) — меньше ложных.
 """
 import json
@@ -11,11 +11,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from hanru.align import align  # noqa: E402
-from hanru.config import Config  # noqa: E402
-from hanru.engine import parse_json_lenient  # noqa: E402
-from hanru.llm import LLMClient  # noqa: E402
-from hanru.workspace import Workspace, parse_range, split_paragraphs  # noqa: E402
+from polytome.align import align  # noqa: E402
+from polytome.config import Config  # noqa: E402
+from polytome.engine import parse_json_lenient  # noqa: E402
+from polytome.llm import LLMClient  # noqa: E402
+from polytome.workspace import Workspace, parse_range, split_paragraphs  # noqa: E402
 
 CAST = """Пол персонажей (проверено по оригиналу):
 - Су Янь (苏言, Янь Эр 言儿) — МУЖЧИНА, юноша 19 лет с женственной внешностью. Всё о нём — в мужском роде.

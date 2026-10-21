@@ -12,16 +12,16 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from hanru.checks import check_chapter, gender_conflicts, name_variants_report  # noqa: E402
-from hanru.config import Config  # noqa: E402
-from hanru.engine import Engine  # noqa: E402
-from hanru.glossary import Glossary  # noqa: E402
-from hanru.llm import LLMClient  # noqa: E402
-from hanru.palladius import transcribe  # noqa: E402
-from hanru.tools import Toolbox  # noqa: E402
-from hanru.workspace import Workspace  # noqa: E402
+from polytome.checks import check_chapter, gender_conflicts, name_variants_report  # noqa: E402
+from polytome.config import Config  # noqa: E402
+from polytome.engine import Engine  # noqa: E402
+from polytome.glossary import Glossary  # noqa: E402
+from polytome.llm import LLMClient  # noqa: E402
+from polytome.palladius import transcribe  # noqa: E402
+from polytome.tools import Toolbox  # noqa: E402
+from polytome.workspace import Workspace  # noqa: E402
 
-SRC = Path(os.environ.get("HANRU_EVAL_BOOK") or Path.home() / "Desktop/Первод книг/Книги/Бешеная жизнь богача")
+SRC = Path(os.environ.get("POLYTOME_EVAL_BOOK") or Path.home() / "Desktop/Первод книг/Книги/Бешеная жизнь богача")
 BOOK = ROOT / "books" / "long"
 
 
@@ -40,7 +40,7 @@ def main():
     ws.meta["title"] = "long"
     ws.init()
     gl = Glossary(ws.glossary_path)
-    gl.entries = json.loads((ROOT / "books/rich_agent/.hanru/glossary.json").read_text(encoding="utf-8"))
+    gl.entries = json.loads((ROOT / "books/rich_agent/.polytome/glossary.json").read_text(encoding="utf-8"))
     # раздуваем глоссарий реальными 2–3-символьными сочетаниями из текста (как растёт глоссарий длинной книги)
     rng = random.Random(1)
     text = "".join(ws.source_paragraphs(n)[3] for n in list(ws.chapters())[:900] if len(ws.source_paragraphs(n)) > 3)

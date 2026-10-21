@@ -5,13 +5,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hanru.agent import parse_text_calls  # noqa: E402
-from hanru.align import align  # noqa: E402
-from hanru.checks import check_chapter, check_segment, find_chinese_names  # noqa: E402
-from hanru.engine import parse_json_lenient, parse_numbered  # noqa: E402
-from hanru.glossary import Glossary, word_stem  # noqa: E402
-from hanru.palladius import transcribe  # noqa: E402
-from hanru.workspace import chapter_number, cn_to_int, parse_range  # noqa: E402
+from polytome.agent import parse_text_calls  # noqa: E402
+from polytome.align import align  # noqa: E402
+from polytome.checks import check_chapter, check_segment, find_chinese_names  # noqa: E402
+from polytome.engine import parse_json_lenient, parse_numbered  # noqa: E402
+from polytome.glossary import Glossary, word_stem  # noqa: E402
+from polytome.palladius import transcribe  # noqa: E402
+from polytome.workspace import chapter_number, cn_to_int, parse_range  # noqa: E402
 
 
 def test_palladius():
@@ -63,7 +63,7 @@ def test_parsers():
 
 
 def test_gender_and_numbers():
-    from hanru.checks import gender_issues, normalize_numbers, number_word_issues
+    from polytome.checks import gender_issues, normalize_numbers, number_word_issues
     ents = [{"source": "苏言", "target": "Су Янь", "kind": "person", "gender": "m"},
             {"source": "沈星", "target": "Шэнь Син", "kind": "person", "gender": "f"}]
     assert gender_issues("Шэнь Син улыбнулся.", ents) and gender_issues("— Да, — сказала Су Янь.", ents)
@@ -74,8 +74,8 @@ def test_gender_and_numbers():
 
 def test_formats_roundtrip():
     from xml.etree import ElementTree as ET
-    from hanru.formats import create_book, export_book, read_epub, read_txt
-    from hanru.workspace import Workspace
+    from polytome.formats import create_book, export_book, read_epub, read_txt
+    from polytome.workspace import Workspace
     tmp = Path(tempfile.mkdtemp())
     txt = tmp / "novel.txt"
     txt.write_text("第一章 开始\n黎小白笑了。\n楊心雅看著他。\n第二章 继续\n他走了。\n", encoding="utf-8")
@@ -101,7 +101,7 @@ def test_align():
 
 
 def _imported_book(src: list[str], tr: list[str]):
-    from hanru.workspace import Workspace
+    from polytome.workspace import Workspace
     ws = Workspace(Path(tempfile.mkdtemp()) / "book")
     ws.init()
     (ws.source_dir / "Глава 1.txt").write_text("\n".join(src), encoding="utf-8")
@@ -111,7 +111,7 @@ def _imported_book(src: list[str], tr: list[str]):
 
 def test_imported_translation_roundtrip():
     """Чужой перевод с другим числом абзацев: правка одного абзаца не склеивает и не вставляет абзацы."""
-    from hanru.workspace import split_paragraphs
+    from polytome.workspace import split_paragraphs
     src = ["第一章", "黎小白笑了笑說道：「你好嗎？我很好，謝謝你的關心。」", "楊心雅點點頭。", "她走了。"]
     tr = ["Глава 1", "Ли Сяобай улыбнулся и сказал:", "— Как ты? У меня всё хорошо, спасибо за заботу.",
           "Ян Синья кивнул.", "Она ушла."]  # абзац 2 переводчик разбил на два
@@ -132,7 +132,7 @@ def test_imported_translation_roundtrip():
 
 def test_legacy_placeholder_and_dropped_not_written():
     import json as _json
-    from hanru.workspace import split_paragraphs
+    from polytome.workspace import split_paragraphs
     ws = _imported_book(["第一章", "他笑了。", "她哭了。"], ["Глава 1", "Он засмеялся.", "Она заплакала."])
     st = ws.load_state(1)
     st["segments"][1]["tr"] = "(склеено с предыдущим абзацем)"  # состояние, записанное версией 0.3.0
@@ -145,8 +145,8 @@ def test_legacy_placeholder_and_dropped_not_written():
 
 
 def test_cleanup_then_edit_keeps_lines_removed():
-    from hanru import cleanup
-    from hanru.workspace import split_paragraphs
+    from polytome import cleanup
+    from polytome.workspace import split_paragraphs
     src = ["第一章", "他笑了。", "求月票！", "她哭了。"]
     tr = ["Глава 1", "Он засмеялся.", "Не забудьте проголосовать месячным билетом!", "Она заплакала."]
     ws = _imported_book(src, tr)

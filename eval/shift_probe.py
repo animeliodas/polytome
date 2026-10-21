@@ -5,8 +5,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from hanru.checks import han_count  # noqa: E402
-from hanru.workspace import Workspace  # noqa: E402
+from polytome.checks import han_count  # noqa: E402
+from polytome.workspace import Workspace  # noqa: E402
 
 
 def flags(segs, thr=2.0):

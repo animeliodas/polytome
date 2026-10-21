@@ -13,11 +13,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from hanru.align import align  # noqa: E402
-from hanru.config import Config  # noqa: E402
-from hanru.engine import parse_json_lenient  # noqa: E402
-from hanru.llm import LLMClient  # noqa: E402
-from hanru.workspace import Workspace, split_paragraphs  # noqa: E402
+from polytome.align import align  # noqa: E402
+from polytome.config import Config  # noqa: E402
+from polytome.engine import parse_json_lenient  # noqa: E402
+from polytome.llm import LLMClient  # noqa: E402
+from polytome.workspace import Workspace, split_paragraphs  # noqa: E402
 
 JUDGE_SYS = """Ты — строгий эксперт-редактор художественного перевода с китайского на русский.
 Тебе дан фрагмент оригинала (абзацы с номерами) и несколько анонимных вариантов перевода (A, B, C…).

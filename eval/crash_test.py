@@ -16,7 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 BOOK = ROOT / "books" / "rich_crash"
-SRC = Path(os.environ.get("HANRU_EVAL_BOOK") or Path.home() / "Desktop/Первод книг/Книги/Бешеная жизнь богача") / "Оригинал"
+SRC = Path(os.environ.get("POLYTOME_EVAL_BOOK") or Path.home() / "Desktop/Первод книг/Книги/Бешеная жизнь богача") / "Оригинал"
 CHAPTERS = "21-26"
 
 
@@ -26,18 +26,18 @@ def setup():
     (BOOK / "Оригинал").mkdir(parents=True)
     for n in range(21, 27):
         shutil.copy(SRC / f"Глава {n}.txt", BOOK / "Оригинал")
-    (BOOK / ".hanru").mkdir()
+    (BOOK / ".polytome").mkdir()
     for f in ("glossary.json", "bible.md"):
-        shutil.copy(ROOT / "books/rich_agent/.hanru" / f, BOOK / ".hanru" / f)
-    (BOOK / ".hanru/book.json").write_text(json.dumps({"title": "crash-test", "batch_chars": 450}), encoding="utf-8")
+        shutil.copy(ROOT / "books/rich_agent/.polytome" / f, BOOK / ".polytome" / f)
+    (BOOK / ".polytome/book.json").write_text(json.dumps({"title": "crash-test", "batch_chars": 450}), encoding="utf-8")
 
 
 def engine(on_event):
-    from hanru.config import Config
-    from hanru.engine import Engine
-    from hanru.llm import LLMClient
-    from hanru.tools import Toolbox
-    from hanru.workspace import Workspace
+    from polytome.config import Config
+    from polytome.engine import Engine
+    from polytome.llm import LLMClient
+    from polytome.tools import Toolbox
+    from polytome.workspace import Workspace
     eng = Engine(Workspace(BOOK), Config.load(), LLMClient(10), on_event=on_event)
     return eng, Toolbox(eng)
 
@@ -57,7 +57,7 @@ def child():
 
 
 def inspect(tag):
-    from hanru.workspace import Workspace, read_json
+    from polytome.workspace import Workspace, read_json
     ws = Workspace(BOOK)
     rows = []
     for n in range(21, 27):
@@ -67,7 +67,7 @@ def inspect(tag):
         rows.append(f"гл.{n}: файл={'да' if ws.is_translated(n) else 'нет'} стадия={(st or {}).get('stage')} "
                     f"абз={done}/{total}")
     job = ws.load_job() or {}
-    corrupt = list((BOOK / ".hanru").rglob("*.corrupt-*")) + list((BOOK).rglob("*.tmp"))
+    corrupt = list((BOOK / ".polytome").rglob("*.corrupt-*")) + list((BOOK).rglob("*.tmp"))
     print(f"--- {tag}: job.status={job.get('status')} done={job.get('done')} | битых/tmp файлов: {len(corrupt)}")
     for r in rows:
         print("   ", r)

@@ -1,6 +1,6 @@
 """Итог редактуры рода по всей книге: исходный перевод vs отредактированная копия.
 
-python eval/gender_book_report.py <папка исходного перевода> <книга Hanru>
+python eval/gender_book_report.py <папка исходного перевода> <книга Polytome>
 """
 import collections
 import difflib
@@ -10,9 +10,9 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from hanru.checks import gender_votes  # noqa: E402
-from hanru.glossary import Glossary  # noqa: E402
-from hanru.workspace import Workspace, chapter_number  # noqa: E402
+from polytome.checks import gender_votes  # noqa: E402
+from polytome.glossary import Glossary  # noqa: E402
+from polytome.workspace import Workspace, chapter_number  # noqa: E402
 
 orig_dir, book = Path(sys.argv[1]), sys.argv[2]
 ws = Workspace(book)

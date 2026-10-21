@@ -8,8 +8,8 @@ from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from hanru.checks import find_chinese_names, gender_votes  # noqa: E402
-from hanru.workspace import chapter_number, split_paragraphs  # noqa: E402
+from polytome.checks import find_chinese_names, gender_votes  # noqa: E402
+from polytome.workspace import chapter_number, split_paragraphs  # noqa: E402
 
 
 def norm(name: str) -> str:

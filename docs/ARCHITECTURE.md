@@ -1,90 +1,109 @@
-# Hanru — архитектура
+# Polytome — architecture
 
-Агентный переводчик в духе Claude Code: REPL, в котором LLM-агент сам вызывает инструменты.
-Отличие — инструменты не про код, а про перевод книги.
+**English** · [Русский](ARCHITECTURE.ru.md)
 
-## Главная идея («хитрый способ»)
+An agentic translator in the spirit of Claude Code: a REPL where an LLM agent calls tools itself. The difference:
+the tools are not about code but about translating a book.
 
-Разделение труда между тремя типами исполнителей:
+## The main idea
 
-| Кто | Что делает | Почему |
+Division of labour between three kinds of workers:
+
+| Who | What it does | Why |
 |---|---|---|
-| **Агент-режиссёр** (сильная модель с tool-calling) | читает книгу, ведёт «библию» и глоссарий, запускает перевод, смотрит отчёты проверок, делает адресные правки | рассуждение и решения — дорого, но мало токенов |
-| **Движок** (детерминированный код + модели-исполнители) | режет главу, переводит батчами параллельно, чинит пропуски, прогоняет рецензента | массовый текст не идёт через контекст агента → нет обрезаний, дёшево, стабильно |
-| **Детерминированные инструменты** (без LLM) | транскрипция имён по Палладию, проверка глоссария, поиск иероглифов/обрезаний, поиск по книге | то, где LLM ошибаются, а код — нет |
+| **Director agent** (a strong model with tool-calling) | reads the book, keeps the "bible" and the glossary, starts translation, reads check reports, makes targeted fixes | reasoning and decisions are expensive but take few tokens |
+| **Engine** (deterministic code + worker models) | splits a chapter, translates in parallel batches, repairs omissions, runs the reviewer | mass text never goes through the agent's context → no truncation, cheap, stable |
+| **Deterministic tools** (no LLM) | name transcription, glossary contract, leftovers/truncation detection, search in the book | where LLMs make mistakes and code does not |
 
-Агент никогда не печатает перевод главы целиком. Он вызывает `translate`, получает отчёт
-(«гл. 5: 48 абзацев, 2 нарушения глоссария, исправлено автоматически 2») и решает, что делать дальше.
+The agent never prints a chapter translation itself. It calls `translate`, gets a report ("ch. 5: 48 paragraphs,
+2 glossary violations, 2 fixed automatically") and decides what to do next.
 
-## Слои
-
-```
-cli.py        подкоманды (new/run/status/stop/continue/audit/export/estimate/setup/doctor/integrate/mcp)
-              + REPL с агентом и слэш-командами
-agent.py      цикл агента: сообщения ↔ модель ↔ инструменты, сворачивание старых результатов, сжатие
-tools.py      ПРОТОКОЛ: реестр инструментов с JSON-схемами (агент, MCP, Hermes — один набор)
-engine.py     перевод: волны → батчи → шов → починка → рецензент (full/flagged/off) → чекпоинты по батчам;
-              подготовка книги без агента (prepare/draft_bible/refresh_bible), оценка, журнал задачи
-checks.py     детерминированный QA: иероглифы, обрезания, имена (заземление в оригинале), пол (морфология +
-              улики из оригинала), числа цифрами, пунктуация
-formats.py    EPUB/TXT/папка → книга; книга → EPUB 3 / FB2 / TXT
-jobs.py       фоновые задачи: запуск отдельным процессом, статус из job.json, остановка флагом STOP
-palladius.py  pinyin → кириллица (Палладий)
-glossary.py   глоссарий книги: термины, пол, тип, основы для склонений
-align.py      выравнивание абзацев чужого перевода (Gale–Church)
-workspace.py  папка книги: оригинал, перевод, .hanru/; атомарная запись; кэш глав
-llm.py        клиент OpenAI-совместимых API, AIMD-пул, ретраи, страховка от «бесконечных рассуждений»
-config.py     каталог провайдеров, слоты моделей, профили (quality/balanced/economy/local), секреты
-mcp_server.py MCP (stdio) без зависимостей
-api.py       API для приложений: класс Hanru (словари на входе/выходе, события, фон, отмена) + call(json)
-server.py    JSON-RPC 2.0 по stdin/stdout поверх api.py (`hanru serve`)
-integrations/hermes/hanru-translator — готовый скил для Hermes (внутри пакета)
-STYLE.md     общие правила перевода (переопределяются STYLE.md рядом с конфигом или style_text)
-```
-
-## Конфигурация: слоты и профили
+## Layers
 
 ```
-слоты (какие модели у вас есть)      профиль (как тщательно работать)
+cli.py        subcommands (new/run/status/stop/continue/audit/export/estimate/setup/doctor/languages/integrate/
+              mcp/serve) + the agent REPL with slash commands
+agent.py      agent loop: messages ↔ model ↔ tools, folding old results, compaction
+tools.py      PROTOCOL: tool registry with JSON schemas (agent, MCP, Hermes — one set)
+engine.py     translation: waves → batches → seam → repair → reviewer (full/flagged/off) → per-batch checkpoints;
+              book preparation without the agent (prepare/draft_bible/refresh_bible), estimates, job journal
+checks.py     deterministic QA: leftovers, truncation, names (grounded in the original), gender (morphology +
+              evidence in the original), numbers as digits, punctuation — switched on per language pair
+lang.py       languages and pairs: script, transcription system, which checks apply, system language
+prompting.py  prompts for a pair: Russian (prompts.py, tuned on zh→ru) or English (prompts_en.py) + pair rules
+i18n.py       interface language (ru/en from the system), _() and the locales/en.json catalog
+palladius.py  pinyin → Cyrillic (Palladius) and toneless pinyin for Latin-script targets
+formats.py    EPUB/TXT/folder → book (source language detection); book → EPUB 3 / FB2 / TXT in the target language
+jobs.py       background jobs: a separate process, status from job.json, stop via the STOP flag
+glossary.py   the book glossary: terms, gender, kind, stems for inflection
+align.py      alignment of someone else's translation (Gale–Church, beads)
+workspace.py  the book folder: original, translation, .polytome/; atomic writes; chapter cache
+llm.py        client for OpenAI-compatible APIs, AIMD pool, retries, a guard against "endless reasoning"
+config.py     provider catalog, model slots, profiles (quality/balanced/economy/local), secrets, target language
+mcp_server.py MCP (stdio) without dependencies
+api.py        API for apps: the Polytome class (dicts in/out, events, background, cancel) + call(json)
+server.py     JSON-RPC 2.0 over stdin/stdout on top of api.py (`polytome serve`)
+integrations/hermes/polytome-translator — a ready skill for Hermes (inside the package)
+styles/       house rules per target language (ru.md, default.md); overridden by STYLE.md / STYLE.<lang>.md next
+              to the config or by style_text
+locales/      interface strings (en.json; the key is the Russian text). tools/i18n_wrap.py wraps and checks them
+```
+
+## Languages
+
+A book stores `source_lang` and `target_lang` (`.polytome/book.json`). They give a `Pair` (`lang.py`) that decides:
+- **prompts**: Russian output — Russian prompts (tuned on Chinese → Russian; for zh→ru they are word for word the
+  previous ones, verified by a snapshot); other languages — English prompts with pair rules;
+- **name transcription**: Chinese → Russian — Palladius, Chinese → Latin script — pinyin, otherwise the model;
+- **checks**: leftovers of the original script — when scripts differ; paragraph length — for CJK → alphabetic;
+  gender morphology and "numbers as digits" — for Russian; name variants — by the transcription system;
+  omissions, numbers, duplicates and the glossary — for every pair.
+
+CLI/API messages use the interface language (`i18n.py`); texts for the model use the prompt language of the pair.
+
+## Configuration: slots and profiles
+
+```
+slots (which models you have)        profile (how carefully to work)
 strong   ollama-cloud:kimi-k3        translator ← strong@low | strong | fast | local
-fast     ollama-cloud:deepseek…      reviewer   ← reviewer | fast | local; режим full | flagged
-agent    ollama-cloud:glm-5.3        батчи, попытки починки, параллельность
+fast     ollama-cloud:deepseek…      reviewer   ← reviewer | fast | local; mode full | flagged
+agent    ollama-cloud:glm-5.3        batches, repair attempts, parallelism
 reviewer / extractor / local
 ```
-Роль = (слот, reasoning_effort) из профиля; явные `roles` в конфиге перекрывают профиль; книга может задать
-свой профиль в `.hanru/book.json`.
+A role = (slot, reasoning_effort) from the profile; explicit `roles` in the config override the profile; a book
+can set its own profile in `.polytome/book.json`; an explicit `--profile` for a run beats the book's profile.
 
-## Роли моделей
+## Model roles
 
-- `agent` — режиссёр (нужен хороший tool-calling).
-- `translator` — исполнитель перевода (можно список → round-robin).
-- `reviewer` — рецензент (лучше другая модель, чем переводчик: ошибки не коррелируют).
-- `extractor` — дешёвая модель для извлечения имён/терминов.
+- `agent` — the director (needs good tool-calling).
+- `translator` — does the translation (can be a list → round-robin).
+- `reviewer` — reviewer (better a different model than the translator: errors do not correlate).
+- `extractor` — a cheap model for extracting names/terms.
 
-Модель задаётся строкой `провайдер:модель` (`ollama-cloud:gemma4:31b` — делится по первому `:`).
+A model is written as `provider:model` (`ollama-cloud:gemma4:31b` — split at the first `:`).
 
-## Протокол вызова инструментов
+## Tool-calling protocol
 
 - `native` — OpenAI `tools` / `tool_calls`.
-- `text` — для моделей без нативных инструментов: модель пишет
-  `<tool_call>{"name": ..., "arguments": {...}}</tool_call>`, результат приходит как
-  `<tool_result>`.
-- `auto` — native, при ошибке API или текстовом вызове внутри content — переключение на text.
+- `text` — for models without native tools: the model writes `<tool_call>{"name": ..., "arguments": {...}}</tool_call>`,
+  the result comes back as `<tool_result>`.
+- `auto` — native; on an API error or a text call inside content — switch to text.
 
-## Папка книги (workspace)
+## The book folder (workspace)
 
 ```
-<книга>/
-  Оригинал/Глава N.txt      (имя папки настраивается: source_dir)
-  Перевод/Глава N.txt       (target_dir)
-  .hanru/
-    book.json              настройки книги (языки, папки, модели-оверрайды)
-    bible.md               «библия» книги: стиль, персонажи, правила (аналог CLAUDE.md)
-    glossary.json          термины: source, target, kind, gender, note, status
-    state/ch0001.json      посегментное состояние: оригинал, перевод, флаги, история правок
-    sessions/              история диалогов с агентом
-    job.json               журнал задачи: главы, готово/ошибки, pid, токены, ETA (для status/continue)
-    logs/                  логи фоновых запусков
-    scanned.json           главы, где уже искали новые имена
-    source_map.json        оглавление исходного EPUB/TXT
+<book>/
+  Original/Chapter N.txt    (folder name is configurable: source_dir; older books: Оригинал/Глава N.txt)
+  Translation/Chapter N.txt (target_dir)
+  .polytome/
+    book.json              book settings (languages, folders, chapter file pattern, model overrides)
+    bible.md               the book "bible": style, characters, rules (like CLAUDE.md)
+    glossary.json          terms: source, target, kind, gender, note, status
+    state/ch00001.json     per-segment state: original, translation, flags, edit history
+    sessions/              agent chat history
+    job.json               job journal: chapters, done/errors, pid, tokens, ETA (for status/continue)
+    logs/                  logs of background runs
+    scanned.json           chapters already scanned for new names
+    source_map.json        table of contents of the source EPUB/TXT
 ```
+Books created under the old project names (`.codek`, `.hanru`) are migrated to `.polytome` when opened.

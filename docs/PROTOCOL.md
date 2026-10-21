@@ -1,7 +1,7 @@
-# Протокол инструментов Hanru
+# Протокол инструментов Polytome
 
-Сгенерировано `eval/gen_protocol.py` из `hanru/tools.py`. Один и тот же реестр используется агентом
-(OpenAI `tools` или текстовый `<tool_call>`) и MCP-сервером (`python -m hanru.mcp_server <книга>`).
+Сгенерировано `eval/gen_protocol.py` из `polytome/tools.py`. Один и тот же реестр используется агентом
+(OpenAI `tools` или текстовый `<tool_call>`) и MCP-сервером (`python -m polytome.mcp_server <книга>`).
 
 Текстовый протокол для моделей без нативных инструментов:
 ```

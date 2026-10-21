@@ -7,9 +7,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from hanru.api import Hanru, HanruError  # noqa: E402
-from hanru.config import Config  # noqa: E402
-from hanru.server import Server  # noqa: E402
+from polytome.api import Polytome, PolytomeError  # noqa: E402
+from polytome.config import Config  # noqa: E402
+from polytome.server import Server  # noqa: E402
 
 CONFIG = {"slots": {"strong": "openrouter:test-model", "fast": "openrouter:test-model",
                     "reviewer": "openrouter:test-model", "extractor": "openrouter:test-model"},
@@ -23,7 +23,7 @@ def _novel(tmp: Path) -> Path:
 
 
 def _fake_translate(book: str, n: int, paras: list[str]):
-    from hanru.workspace import Workspace
+    from polytome.workspace import Workspace
     ws = Workspace(book)
     ws.target_dir.mkdir(parents=True, exist_ok=True)
     ws.target_path(n).write_text("\n\n".join(paras), encoding="utf-8")
@@ -36,12 +36,12 @@ def test_config_in_memory():
     assert cfg.profile_name == "economy" and cfg.role("translator")[0].model == "test-model"
     assert "Числа" in cfg.style_text()  # встроенный STYLE.md из пакета
     assert Config.from_dict({**CONFIG, "style_text": "свои правила"}, home).style_text() == "свои правила"
-    assert not (home / "hanru.json").exists() and not (home / "secrets.json").exists()  # ничего не записано
+    assert not (home / "polytome.json").exists() and not (home / "secrets.json").exists()  # ничего не записано
 
 
 def test_library_and_reading():
     tmp = Path(tempfile.mkdtemp())
-    h = Hanru(CONFIG, home=tmp / "home")
+    h = Polytome(CONFIG, home=tmp / "home")
     info = h.import_book(_novel(tmp))
     book = info["path"]
     assert Path(book).parent == tmp / "home" / "books", book
@@ -66,15 +66,15 @@ def test_library_and_reading():
     try:
         h.chapter(book, 99)
         raise AssertionError("ожидалась ошибка")
-    except HanruError:
+    except PolytomeError:
         pass
 
 
 def test_check_and_providers():
-    h = Hanru(CONFIG, home=Path(tempfile.mkdtemp()))
+    h = Polytome(CONFIG, home=Path(tempfile.mkdtemp()))
     c = h.check()
     assert c["ready"] and c["roles"]["translator"]["model"] == "openrouter:test-model", c
-    no_key = Hanru({**CONFIG, "providers": {}}, home=Path(tempfile.mkdtemp()))
+    no_key = Polytome({**CONFIG, "providers": {}}, home=Path(tempfile.mkdtemp()))
     assert not no_key.check()["ready"]
     prov = {p["id"]: p for p in h.providers()}
     assert prov["openrouter"]["has_key"] and prov["ollama"]["local"] and not prov["ollama"]["needs_key"]
@@ -83,17 +83,18 @@ def test_check_and_providers():
 
 def test_legacy_book_folder():
     tmp = Path(tempfile.mkdtemp())
-    h = Hanru(CONFIG, home=tmp)
+    h = Polytome(CONFIG, home=tmp)
     book = Path(h.import_book(_novel(tmp))["path"])
-    (book / ".hanru").rename(book / ".codek")  # книга, созданная до переименования проекта
-    assert h.book_info(book)["chapters_total"] == 2
-    assert (book / ".hanru").is_dir() and not (book / ".codek").exists()
+    for old in (".codek", ".hanru"):  # книги, созданные под прежними именами проекта
+        (book / ".polytome").rename(book / old)
+        assert h.book_info(book)["chapters_total"] == 2
+        assert (book / ".polytome").is_dir() and not (book / old).exists()
 
 
 def test_profile_precedence():
-    from hanru.engine import Engine
-    from hanru.llm import LLMClient
-    from hanru.workspace import Workspace
+    from polytome.engine import Engine
+    from polytome.llm import LLMClient
+    from polytome.workspace import Workspace
     tmp = Path(tempfile.mkdtemp())
     ws = Workspace(tmp / "b")
     ws.meta["profile"] = "quality"
@@ -106,18 +107,18 @@ def test_profile_precedence():
 
 def test_call_json():
     tmp = Path(tempfile.mkdtemp())
-    h = Hanru(CONFIG, home=tmp)
+    h = Polytome(CONFIG, home=tmp)
     r = json.loads(h.call("import_book", json.dumps({"source": str(_novel(tmp))})))
     assert r["ok"] and r["result"]["chapters_total"] == 2, r
     book = r["result"]["path"]
     r = json.loads(h.call("chapter", {"book": book, "n": 2, "which": "source"}))
     assert r["ok"] and r["result"]["source"] == ["第二章 继续", "他走了。"], r
     r = json.loads(h.call("export", {"book": book}))
-    assert not r["ok"] and r["error"]["type"] == "HanruError", r  # переведённых глав нет
+    assert not r["ok"] and r["error"]["type"] == "PolytomeError", r  # переведённых глав нет
     r = json.loads(h.call("rm_rf", {}))
-    assert not r["ok"] and "Нет метода" in r["error"]["message"]
+    assert not r["ok"] and "rm_rf" in r["error"]["message"] and r["error"]["type"] == "PolytomeError"
     r = json.loads(h.call("chapters", {"book": str(tmp / "нет такой")}))
-    assert not r["ok"] and "Не книга" in r["error"]["message"]
+    assert not r["ok"] and r["error"]["type"] == "PolytomeError" and "нет такой" in r["error"]["message"]
 
 
 def test_events_listener():
@@ -128,7 +129,7 @@ def test_events_listener():
             got.append(json.loads(s))
 
     tmp = Path(tempfile.mkdtemp())
-    h = Hanru(CONFIG, home=tmp, on_event=KotlinLike())
+    h = Polytome(CONFIG, home=tmp, on_event=KotlinLike())
     book = h.import_book(_novel(tmp))["path"]
     eng = h._engine(book)
     eng.emit("chapter_start", n=1, segments=3)
