@@ -663,6 +663,39 @@ def cmd_profiles(a, cfg):
     print_profiles(cfg)
 
 
+def cmd_bench(a, cfg):
+    from . import bench
+    results = Path(a.results)
+    if a.leaderboard:
+        md = bench.leaderboard(bench.load(results))
+        out = results.parent / "LEADERBOARD.md"
+        out.write_text(md, encoding="utf-8")
+        console.print(_("таблица: {0} ({1} результатов)").format(out, len(bench.load(results))))
+        return
+    models = a.model or [cfg.role_specs("translator")[0][0]]
+    pairs = a.pair or ["zh-ru"]
+    for model in models:
+        for pair in pairs:
+            console.print(f"[bold]{model}[/bold] · {pair}…")
+
+            def show(e):
+                if e.get("ev") == "bench_progress":
+                    console.print(_("  гл.{0}/{1}: {2}").format(e["chapter"], e["chapters"], e["stage"]))
+
+            rec = bench.run(cfg, model, pair, cfg.base_dir or Path.cwd(), on_event=show, keep=a.keep)
+            if rec.get("error"):
+                console.print(_("  [red]ошибка:[/red] {0}").format(rec["error"]))
+                continue
+            cost = f", ${rec['cost_usd']:.4f}" if rec.get("cost_usd") is not None else ""
+            console.print(_("  score {0} · сразу {1}% · после починки {2}% · {3} с · {4:,} ток.{5}").format(
+                rec["score"], rec["first_pass_ok"], rec["final_ok"], rec["seconds"],
+                rec["tokens"]["prompt"] + rec["tokens"]["completion"], cost))
+            if rec["issues_final"]:
+                console.print(_("  осталось: {0}").format(", ".join(f"{k} ×{v}" for k, v in rec["issues_final"].items())))
+            if not a.no_save:
+                console.print(_("  сохранено: {0}").format(bench.save(rec, results)))
+
+
 def cmd_models(a, cfg):
     list_models(cfg, LLMClient(4), a.provider)
 
@@ -876,7 +909,7 @@ def cmd_ask(a, cfg):
 
 
 COMMANDS = {"new", "run", "continue", "status", "stop", "audit", "export", "estimate", "profiles", "models",
-            "doctor", "setup", "mcp", "serve", "languages", "ask", "chat", "integrate", "clean", "edit", "cast"}
+            "doctor", "setup", "mcp", "serve", "languages", "ask", "chat", "integrate", "clean", "edit", "cast", "bench"}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -949,6 +982,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("profiles", help=_("профили; --set — выбрать"))
     p.add_argument("--set")
     p.add_argument("--book", help=_("задать профиль только этой книге"))
+    p = sub.add_parser("bench", help=_("проверить модель на общем наборе текстов (качество — проверками кода)"))
+    p.add_argument("-m", "--model", action="append", help=_("провайдер:модель (можно несколько; по умолчанию — переводчик)"))
+    p.add_argument("-p", "--pair", action="append", help=_("пара языков: zh-ru, zh-en, en-ru (можно несколько)"))
+    p.add_argument("--results", default="bench/results", help=_("куда сохранять результаты"))
+    p.add_argument("--no-save", action="store_true", help=_("не сохранять результат"))
+    p.add_argument("--keep", action="store_true", help=_("оставить рабочую папку прогона для разбора"))
+    p.add_argument("--leaderboard", action="store_true", help=_("собрать bench/LEADERBOARD.md из результатов"))
     p = sub.add_parser("models", help=_("модели провайдера"))
     p.add_argument("provider", nargs="?")
     sub.add_parser("doctor", help=_("проверить ключи, связь и модели"))
@@ -1009,7 +1049,7 @@ def main(argv=None):
     handlers = {"new": cmd_new, "run": cmd_run, "continue": lambda a, c: cmd_run(a, c, continuing=True),
                 "status": cmd_status, "stop": cmd_stop, "audit": cmd_audit, "export": cmd_export,
                 "clean": cmd_clean, "edit": cmd_edit, "cast": cmd_cast,
-                "estimate": cmd_estimate, "profiles": cmd_profiles, "models": cmd_models, "doctor": cmd_doctor,
+                "estimate": cmd_estimate, "profiles": cmd_profiles, "models": cmd_models, "bench": cmd_bench, "doctor": cmd_doctor,
                 "setup": cmd_setup, "mcp": cmd_mcp, "serve": cmd_serve, "languages": cmd_languages, "ask": cmd_ask, "integrate": cmd_integrate,
                 "chat": lambda a, c: App(Path(a.book), c, a.verbose, a.protocol).repl()}
     try:

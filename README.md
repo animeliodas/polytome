@@ -60,6 +60,7 @@ xianxia terms for Chinese → English, Hepburn for Japanese, dialogue punctuatio
 | `polytome export <book> --format epub\|fb2\|txt\|all` | build the book |
 | `polytome profiles [--set economy [--book <book>]]` | quality/economy profiles |
 | `polytome models [provider]` / `polytome languages` | available models / languages |
+| `polytome bench -m <provider:model> [-p zh-ru]` | score a model on the shared test texts ([leaderboard](bench/LEADERBOARD.md)) |
 | `polytome <book>` / `polytome ask <book> "task"` | chat with the agent / a one-sentence task |
 | `polytome integrate hermes` | install the Hermes skill |
 | `polytome mcp <book>` / `polytome serve` | MCP server for agents / JSON-RPC API for apps |
@@ -88,6 +89,10 @@ polytome setup --provider openrouter --key sk-... --strong <model> --fast <model
 ```
 Keys are stored in `secrets.json` (or environment variables), not in `polytome.json`. A model without native
 tool-calling works too — the agent switches to a text protocol by itself.
+
+Which model to choose: `polytome bench` scores models on the same test texts with the code checks (no model judges
+another), with speed and price; everyone's results are collected in [bench/LEADERBOARD.md](bench/LEADERBOARD.md) —
+add yours, see [bench/README.md](bench/README.md).
 
 ## Reliability
 

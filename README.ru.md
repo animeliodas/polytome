@@ -60,6 +60,7 @@ polytome setup --to ru                     # язык чтения по умол
 | `polytome export <книга> --format epub\|fb2\|txt\|all` | собрать книгу |
 | `polytome profiles [--set economy [--book <книга>]]` | профили качества/экономии |
 | `polytome models [провайдер]` / `polytome languages` | доступные модели / языки |
+| `polytome bench -m <провайдер:модель> [-p zh-ru]` | оценить модель на общих тестовых текстах ([таблица](bench/LEADERBOARD.md)) |
 | `polytome <книга>` / `polytome ask <книга> "задача"` | диалог с агентом / задача одной фразой |
 | `polytome integrate hermes` | установить скил для Hermes |
 | `polytome mcp <книга>` / `polytome serve` | MCP-сервер для агентов / JSON-RPC API для приложений |
@@ -88,6 +89,10 @@ polytome setup --provider openrouter --key sk-... --strong <модель> --fast
 ```
 Ключи хранятся в `secrets.json` (или переменных окружения), не в `polytome.json`. Модель без нативного
 tool-calling тоже работает — агент переключается на текстовый протокол сам.
+
+Какую модель выбрать: `polytome bench` оценивает модели на одинаковых тестовых текстах проверками кода (никакая
+модель не судит другую), со скоростью и ценой; результаты всех собираются в [bench/LEADERBOARD.md](bench/LEADERBOARD.md) —
+добавьте свой, см. [bench/README.md](bench/README.md).
 
 ## Надёжность
 

@@ -309,5 +309,20 @@
  "язык перевода: en, ru, es, ja… (по умолчанию — из настроек или язык системы)": "target language: en, ru, es, ja… (default — from settings or the system language)",
  "… ещё {0}": "… {0} more",
  "⊘ {0}: LLM предлагала «{1}», оставлен Палладий «{2}»": "⊘ {0}: the LLM suggested «{1}», kept the deterministic «{2}»",
- "Модель не вернула перевод абзаца": "The model returned no translation of the paragraph"
+ "Модель не вернула перевод абзаца": "The model returned no translation of the paragraph",
+ "Модель указывается как провайдер:модель, например openrouter:deepseek/deepseek-chat": "A model is given as provider:model, for example openrouter:deepseek/deepseek-chat",
+ "Нет пары {0} в наборе. Есть: {1}": "The suite has no pair {0}. Available: {1}",
+ "  [red]ошибка:[/red] {0}": "  [red]error:[/red] {0}",
+ "  score {0} · сразу {1}% · после починки {2}% · {3} с · {4:,} ток.{5}": "  score {0} · first pass {1}% · after repair {2}% · {3} s · {4:,} tok.{5}",
+ "  гл.{0}/{1}: {2}": "  ch.{0}/{1}: {2}",
+ "  осталось: {0}": "  left: {0}",
+ "  сохранено: {0}": "  saved: {0}",
+ "куда сохранять результаты": "where to save results",
+ "не сохранять результат": "do not save the result",
+ "оставить рабочую папку прогона для разбора": "keep the run's working folder for inspection",
+ "пара языков: zh-ru, zh-en, en-ru (можно несколько)": "language pair: zh-ru, zh-en, en-ru (can be repeated)",
+ "провайдер:модель (можно несколько; по умолчанию — переводчик)": "provider:model (can be repeated; default — the translator)",
+ "проверить модель на общем наборе текстов (качество — проверками кода)": "score a model on the shared test texts (quality by code checks)",
+ "собрать bench/LEADERBOARD.md из результатов": "build bench/LEADERBOARD.md from the results",
+ "таблица: {0} ({1} результатов)": "table: {0} ({1} results)"
 }

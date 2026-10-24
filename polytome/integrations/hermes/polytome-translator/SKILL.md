@@ -1,7 +1,7 @@
 ---
 name: polytome-translator
 description: "Translate whole books with the Polytome CLI from any language into any language (EPUB/TXT/folder of chapters; Chinese web novels and more): new book, background translation, status, resume after a crash, check/repair an existing translation, build EPUB/FB2/TXT. Use for translating books."
-version: 0.5.0
+version: 0.6.0
 author: animeliodas
 license: GPL-3.0-or-later
 metadata:

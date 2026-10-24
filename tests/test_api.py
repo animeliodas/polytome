@@ -3,6 +3,7 @@ import io
 import json
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -238,6 +239,89 @@ def test_translate_meta():
     assert [c["title"] for c in toc] == ["Глава 1. Начало", "Глава 2. Продолжение"], toc
     assert toc[0]["source_title"] == "第一章 开始" and not toc[0]["translated"]
     assert h.translate_meta(book)["toc_translated"] == 0  # уже переведённое не переводится заново
+
+
+def test_bench():
+    """Замер модели: одинаковый набор, качество — проверками кода; результат без ключей; таблица по результатам."""
+    import re
+    import httpx
+    from polytome import bench, bench_suite
+
+    def good(req):
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": [{"id": "test-model", "pricing": {"prompt": "0.000001",
+                                                                                        "completion": "0.000002"}}]})
+        body = json.loads(req.content)
+        user = body["messages"][-1]["content"]
+        out = []
+        for m in (re.match(r"^\[(\d+)\] (.*)$", ln) for ln in user.split("\n")):
+            if m:
+                han = len(re.findall(r"[\u4e00-\u9fff]", m.group(2)))
+                nums = " ".join(re.findall(r"\d+", m.group(2)))
+                vocab = ["дождь", "дорога", "лавка", "гора", "письмо", "свет", "дверь", "ночь", "чай", "храм", "утро"]
+                words = " ".join(vocab[(int(m.group(1)) * 7 + i * 3) % len(vocab)] + str(i % 5)
+                                 for i in range(max(2, han // 2)))
+                names = ", ".join(e["target"] for e in bench_suite.glossary("zh", "ru") if e["source"] in m.group(2))
+                out.append(f"[{m.group(1)}] {names}. {words} {nums}".rstrip())
+        return httpx.Response(200, json={"choices": [{"message": {"content": "\n".join(out)}, "finish_reason": "stop"}],
+                                         "usage": {"prompt_tokens": 1000, "completion_tokens": 200}})
+
+    def echo(req):
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": []})
+        user = json.loads(req.content)["messages"][-1]["content"]
+        out = [ln for ln in user.split("\n") if re.match(r"^\[\d+\] ", ln)]
+        return httpx.Response(200, json={"choices": [{"message": {"content": "\n".join(out) or "x"}, "finish_reason": "stop"}],
+                                         "usage": {"prompt_tokens": 10, "completion_tokens": 10}})
+
+    tmp = Path(tempfile.mkdtemp())
+    h = Polytome(CONFIG, home=tmp / "home")
+    info = h.bench_info()
+    assert info["suite"].startswith("1-") and [p["pair"] for p in info["pairs"]] == ["zh-ru", "zh-en", "en-ru"], info
+    from polytome.llm import LLMClient
+    llm = LLMClient(2)
+    llm.http = httpx.Client(transport=httpx.MockTransport(good))
+    rec = bench.run(h.cfg, "openrouter:test-model", "zh-ru", tmp / "home", llm=llm)
+    assert "error" not in rec, rec
+    assert rec["segments"] == 18 and rec["model"] == "openrouter:test-model" and rec["pair"] == "zh-ru", rec
+    assert rec["first_pass_ok"] > 50 and 0 <= rec["score"] <= 100, rec
+    assert rec["tokens"]["prompt"] > 0 and rec["price_per_1m_tokens"] == {"in": 1.0, "out": 2.0} and rec["cost_usd"] > 0
+    assert len(rec["translation"]) == 2 and {"Линь Сяоюй", "Цинши"} <= set(rec["translation"]["1"][1].split(". ")[0].split(", "))
+    assert "test-key" not in json.dumps(rec) and "base_url" not in json.dumps(rec)  # результат можно публиковать
+    assert not (tmp / "home" / ".bench").exists() or not any((tmp / "home" / ".bench").iterdir())  # временное убрано
+
+    llm2 = LLMClient(2)
+    llm2.http = httpx.Client(transport=httpx.MockTransport(echo))
+    bad = bench.run(h.cfg, "openrouter:echo", "zh-ru", tmp / "home", llm=llm2)
+    assert bad["first_pass_ok"] < 20 and bad["issues_first"].get("untranslated"), bad
+    assert bad["score"] < rec["score"] and bad["cost_usd"] is None
+
+    res = tmp / "results"
+    p1 = bench.save(rec, res)
+    p2 = bench.save(rec, res)  # тот же день и модель — второй файл, не перезапись
+    assert p1 != p2 and p1.parent.name == "zh-ru"
+    bench.save(bad, res)
+    md = bench.leaderboard(bench.load(res))
+    assert "## zh-ru" in md and "`openrouter:test-model` | 2 |" in md, md
+    assert md.index("openrouter:test-model") < md.index("openrouter:echo")  # лучшая модель выше
+
+    cancel = threading.Event()
+    cancel.set()
+    stopped = bench.run(h.cfg, "openrouter:test-model", "en-ru", tmp / "home", cancel=cancel, llm=llm)
+    assert stopped.get("error") == "cancelled", stopped
+    # отмена посреди прогона (запрос уже ушёл) — тоже «отменено», а не результат без починки
+    late = threading.Event()
+
+    def cancel_on_request(req):
+        late.set()
+        return good(req)
+
+    llm3 = LLMClient(2)
+    llm3.http = httpx.Client(transport=httpx.MockTransport(cancel_on_request))
+    mid = bench.run(h.cfg, "openrouter:test-model", "zh-ru", tmp / "home", cancel=late, llm=llm3)
+    assert mid.get("error") == "cancelled", mid
+    out = json.loads(h.call("bench", {"model": "no-colon"}))
+    assert not out["ok"], out
 
 
 if __name__ == "__main__":

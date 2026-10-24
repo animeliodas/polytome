@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "polytome"
-version = "0.5.0"
+version = "0.6.0"
 description = "Переводчик книг на основе LLM с проверками кодом (имена по Палладию, пол, числа); CLI, API для приложений, MCP"
 readme = "README.md"
 requires-python = ">=3.10"

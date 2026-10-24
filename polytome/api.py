@@ -57,6 +57,7 @@ class Polytome:
         self._active: dict[str, Engine] = {}
         self._threads: dict[str, threading.Thread] = {}
         self._lock = threading.Lock()
+        self._bench_cancel: threading.Event | None = None
 
     @classmethod
     def from_json(cls, config_json: str | None, home: str | None = None, on_event: Any = None) -> "Polytome":
@@ -412,6 +413,38 @@ class Polytome:
         ws.set_segment(int(n), segs[int(paragraph)]["id"], text, by="user")
         return {"ok": True}
 
+    # ------------------------------------------------------------------ замеры моделей
+    def bench_info(self) -> dict:
+        """Набор для замеров: версия, пары языков, размер и грубая оценка токенов на пару."""
+        from . import bench
+        return bench.info()
+
+    def bench(self, model: str | None = None, pair: str = "zh-ru", save_dir: str | Path | None = None,
+              keep: bool = False) -> dict:
+        """Проверить модель на наборе bench (одинаковые тексты, качество — проверками кода). model —
+        «провайдер:модель» (по умолчанию — переводчик из конфига). Прогресс — события bench_progress, итог —
+        bench_done. Возвращает запись результата (JSON без ключей и адресов); save_dir — ещё и сохранить файл."""
+        from . import bench
+        spec = model or self.cfg.role_specs("translator")[0][0]
+        if ":" not in spec:
+            raise PolytomeError(_("Модель указывается как провайдер:модель, например openrouter:deepseek/deepseek-chat"))
+        cancel = threading.Event()
+        self._bench_cancel = cancel
+        try:
+            rec = bench.run(self.cfg, spec, pair, self.home, on_event=lambda e: self._emit(None, e), cancel=cancel,
+                            keep=keep)
+        finally:
+            self._bench_cancel = None
+        if save_dir:
+            rec["file"] = str(bench.save(rec, Path(save_dir)))
+        return rec
+
+    def bench_cancel(self) -> dict:
+        ev = self._bench_cancel
+        if ev:
+            ev.set()
+        return {"stopping": bool(ev)}
+
     # ------------------------------------------------------------------ сборка
     def export(self, book: str | Path, fmt: str = "epub", out: str | Path | None = None,
                chapters: Any = None) -> dict | list[dict]:
@@ -433,7 +466,8 @@ class Polytome:
     METHODS = ("version", "providers", "profiles", "languages", "set_languages", "config_summary", "models", "check",
                "import_book", "books",
                "book_info", "chapters", "chapter", "estimate", "translate", "resume", "cancel", "status",
-               "translate_text", "translate_meta", "explain", "suggest_fix", "set_paragraph", "export")
+               "translate_text", "translate_meta", "explain", "suggest_fix", "set_paragraph", "export",
+               "bench_info", "bench", "bench_cancel")
 
     def call(self, method: str, params: dict | str | None = None) -> str:
         """Вызов по имени с JSON-параметрами → JSON-строка {"ok": true, "result": ...} или
