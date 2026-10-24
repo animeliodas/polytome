@@ -50,7 +50,7 @@ chaquopy {
         version = "3.12"
         pip {
             install("polytome")                              // с PyPI, после публикации
-            // install("../polytome/dist/polytome-0.4.0-py3-none-any.whl")  // или локальная сборка: python -m build
+            // install("../polytome/dist/polytome-0.5.0-py3-none-any.whl")  // или локальная сборка: python -m build
         }
     }
 }
@@ -119,11 +119,11 @@ const rpc = (method, params = {}) => new Promise((ok) => {
 
 | метод | параметры | результат |
 |---|---|---|
-| `version` | — | `{"polytome": "0.4.0", "api": 1}` |
+| `version` | — | `{"polytome": "0.5.0", "api": 1}` |
 | `check` | `ping=false` | готовность: модель и ключ для каждой роли; `ping` — короткий запрос к моделям |
 | `providers` | — | каталог провайдеров: `id, title, local, needs_key, has_key, keys_url, suggest` |
 | `profiles` | — | `quality / balanced / economy / local` с описанием |
-| `models` | `provider` | модели провайдера (его `/models`) |
+| `models` | `provider` | актуальные модели провайдера из его `/models`: `id, name`, а если провайдер сообщает — `context`, `price_in` / `price_out` (USD за 1 млн токенов), `free` |
 | `config_summary` | — | профиль, модели по ролям, параметры движка |
 | `languages` | `source_lang="zh"` | языки для выбора: `code, name, native, script`, какие проверки есть для пары (`name_system`, `gender_check`), `default` |
 | `import_book` | `source, library?, title?, fix_breaks=false, target_lang?, source_lang?` | сведения о книге (+ `import`: отчёт импорта). EPUB, TXT или папка глав; язык оригинала определяется по тексту |
@@ -138,6 +138,10 @@ const rpc = (method, params = {}) => new Promise((ok) => {
 | `cancel` | `book` | `{"stopping": true}` |
 | `status` | `book` | прогресс без LLM: `job.state` (`running / done / cancelled / interrupted / failed`), `done, left, eta_min, tokens_this_run` |
 | `translate_text` | `text, book?, source_lang?, target_lang?, profile?` | перевод фрагмента; с `book` — имена по глоссарию книги, без — язык определяется по тексту |
+| `translate_meta` | `book, toc=true` | название и автор на языке перевода (китайский автор — транскрипцией, без модели; «佚名» — «автор неизвестен») и, с `toc`, заголовки ещё не переведённых глав — библиотека и оглавление сразу на языке читателя; готовое пропускается; прогресс — события `toc_progress` |
+| `explain` | `book, n, paragraph, fragment?, question?` | ответ читателю о фрагменте (слова, имена, термины, идиомы) с учётом глоссария и библии книги; `paragraph` — с 0 → `{answer}` |
+| `suggest_fix` | `book, n, paragraph, instruction?, mode=fix` | новый перевод одного абзаца, **без сохранения**: `fix` — поправить текущий по указанию, `retranslate` — перевести заново → `{source, old, new}` |
+| `set_paragraph` | `book, n, paragraph, text` | сохранить перевод абзаца (прежний текст остаётся в истории главы) |
 | `export` | `book, fmt="epub"\|"fb2"\|"txt"\|"all", out?, chapters?` | `{"path", "chapters", "missing_total", ...}` |
 
 `chapters` везде принимает `"all"`, `"1-10,15"`, число или список чисел. Через `call()`/JSON-RPC `translate`

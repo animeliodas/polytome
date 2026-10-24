@@ -12,16 +12,18 @@ from pathlib import Path
 from .i18n import _
 
 
-def atomic_write(path: Path, text: str, encoding: str = "utf-8"):
+def atomic_write(path: Path, text: str, encoding: str = "utf-8", durable: bool = True):
     """Запись через временный файл + os.replace: при отключении питания файл либо старый, либо новый,
-    но никогда не обрезанный наполовину."""
+    но никогда не обрезанный наполовину. durable=False — без fsync (массовая запись при импорте: там атомарность
+    обеспечивает переименование всей папки книги, а fsync на каждую из тысячи глав — секунды на телефоне)."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     with open(tmp, "w", encoding=encoding, newline="") as f:
         f.write(text)
-        f.flush()
-        os.fsync(f.fileno())
+        if durable:
+            f.flush()
+            os.fsync(f.fileno())
     for attempt in range(5):  # Windows: файл может быть на миг занят антивирусом/читалкой
         try:
             os.replace(tmp, path)

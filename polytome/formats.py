@@ -7,6 +7,7 @@ from __future__ import annotations
 import base64
 import html
 import json
+import os
 import re
 import shutil
 import time
@@ -186,7 +187,7 @@ def _zread(z: zipfile.ZipFile, name: str) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
-def read_epub(path: Path) -> dict:
+def read_epub(path: Path, on_progress=None) -> dict:
     """→ {"title", "author", "lang", "cover": (имя, байты)|None, "chapters": [{"title", "paragraphs"}]}"""
     z = zipfile.ZipFile(path)
     container = ET.fromstring(z.read("META-INF/container.xml"))
@@ -218,7 +219,9 @@ def read_epub(path: Path) -> dict:
 
     # документы в порядке spine → поток блоков с границами документов
     stream: list[tuple[str, str, str]] = []  # (doc, kind, text)
-    for it in spine:
+    for si, it in enumerate(spine):
+        if on_progress and si % 25 == 0:
+            on_progress("parse", si, len(spine))
         if "html" not in (it.get("media-type") or "") or "nav" in (it.get("properties") or ""):
             continue
         doc = full(it.get("href"))
@@ -317,18 +320,27 @@ class _NavParser(HTMLParser):
 
 
 def _split_by_toc(stream, toc) -> list[dict]:
-    # позиции начала каждой записи оглавления в потоке
+    # Позиции начала каждой записи оглавления. Индекс строится один раз: раньше каждая запись просматривала
+    # весь поток — на романе в 1333 главы это 200+ млн сравнений (17 с на ПК, минута на телефоне).
+    doc_start: dict[str, int] = {}
+    id_pos: dict[tuple[str, str], int] = {}
+    for i, (d, k, t) in enumerate(stream):
+        if k == "doc":
+            doc_start.setdefault(d, i)
+        elif k == "id":
+            id_pos.setdefault((d, t), i)
+    resolved: dict[str, str | None] = {}
+
+    def stream_doc(doc: str) -> str | None:
+        if doc not in resolved:
+            resolved[doc] = doc if doc in doc_start else next(
+                (d for d in doc_start if d.endswith(doc) or doc.endswith(d)), None)
+        return resolved[doc]
+
     starts = []
     for doc, frag, label in toc:
-        pos = None
-        for i, (d, k, t) in enumerate(stream):
-            if d.endswith(doc) or doc.endswith(d):
-                if not frag and k == "doc":
-                    pos = i
-                    break
-                if frag and k == "id" and t == frag:
-                    pos = i
-                    break
+        d = stream_doc(doc)
+        pos = None if d is None else (id_pos.get((d, frag)) if frag else doc_start.get(d))
         if pos is not None and (not starts or pos > starts[-1][0]):
             starts.append((pos, label))
     chapters = []
@@ -371,6 +383,99 @@ def _split_by_docs(stream, min_len: int = 200) -> list[dict]:
 
 
 # ---------- TXT ----------
+FB2_NS = "{http://www.gribuser.ru/xml/fictionbook/2.0}"
+_FB2_TEXT = {"p", "subtitle", "v", "text-author"}
+
+
+def _fb2_text(el) -> str:
+    return re.sub(r"\s+", " ", "".join(el.itertext())).strip()
+
+
+def _fb2_paragraphs(el, out: list[str]):
+    """Абзацы элемента по порядку: p, subtitle, стихи (v), цитаты, эпиграфы; вложенные секции не трогаем."""
+    for ch in el:
+        tag = ch.tag.replace(FB2_NS, "")
+        if tag == "section":
+            continue
+        if tag in _FB2_TEXT:
+            t = _fb2_text(ch)
+            if t:
+                out.append(t)
+        elif tag in ("poem", "stanza", "cite", "epigraph", "annotation"):
+            _fb2_paragraphs(ch, out)
+
+
+def _fb2_sections(body, chapters: list[dict]):
+    """Глава — секция с текстом; часть/том (секции внутри секции) раскрывается, её заголовок идёт перед первой главой."""
+    for sec in body.findall(f"{FB2_NS}section"):
+        title_el = sec.find(f"{FB2_NS}title")
+        title = " ".join(_fb2_text(p) for p in title_el.findall(f"{FB2_NS}p")) if title_el is not None else ""
+        paras: list[str] = []
+        _fb2_paragraphs(sec, paras)
+        inner = sec.findall(f"{FB2_NS}section")
+        if inner and len(paras) <= 3:
+            before = len(chapters)
+            _fb2_sections(sec, chapters)
+            if title and len(chapters) > before:  # заголовок части — в начало её первой главы
+                first = chapters[before]
+                first["paragraphs"] = [title] + first["paragraphs"]
+            continue
+        if title or paras:
+            chapters.append({"title": title or (paras[0] if paras else ""),
+                             "paragraphs": ([title] if title else []) + paras})
+        if inner:
+            _fb2_sections(sec, chapters)
+
+
+def read_fb2(path: Path) -> dict:
+    """FB2 и FB2.ZIP → {"title", "author", "lang", "cover", "chapters", "toc_used"} (как read_epub)."""
+    raw = path.read_bytes()
+    if zipfile.is_zipfile(path):
+        with zipfile.ZipFile(path) as z:
+            name = next((n for n in z.namelist() if n.lower().endswith(".fb2")), None)
+            if not name:
+                raise ValueError(_("Не удалось найти главы в файле"))
+            raw = z.read(name)
+    root = ET.fromstring(raw)  # кодировку (utf-8, windows-1251…) ElementTree берёт из XML-заголовка
+    info = root.find(f"{FB2_NS}description/{FB2_NS}title-info")
+    title, author, meta_lang, cover = path.stem, "", "", None
+    if info is not None:
+        title = (info.findtext(f"{FB2_NS}book-title") or title).strip()
+        a = info.find(f"{FB2_NS}author")
+        if a is not None:
+            parts = [a.findtext(f"{FB2_NS}{k}") or "" for k in ("first-name", "middle-name", "last-name")]
+            author = " ".join(x.strip() for x in parts if x.strip()) or (a.findtext(f"{FB2_NS}nickname") or "").strip()
+        meta_lang = (info.findtext(f"{FB2_NS}lang") or "").strip()
+        img = info.find(f"{FB2_NS}coverpage/{FB2_NS}image")
+        if img is not None:
+            href = next((v for k, v in img.attrib.items() if k.endswith("href")), "").lstrip("#")
+            for b in root.findall(f"{FB2_NS}binary"):
+                if b.get("id") == href and b.text:
+                    try:
+                        ext = (b.get("content-type") or "image/jpeg").split("/")[-1].replace("jpeg", "jpg")
+                        cover = (f"cover.{ext}", base64.b64decode(b.text))
+                    except ValueError:
+                        pass
+    chapters: list[dict] = []
+    for body in root.findall(f"{FB2_NS}body"):
+        if body.get("name") in ("notes", "comments"):
+            continue  # сноски — отдельное тело, не главы
+        _fb2_sections(body, chapters)
+        if not chapters:  # тело без секций
+            paras: list[str] = []
+            _fb2_paragraphs(body, paras)
+            if paras:
+                chapters.append({"title": paras[0], "paragraphs": paras})
+    text_sample = "\n".join(p for ch in chapters[:5] for p in ch["paragraphs"])
+    lang = detect_lang(text_sample or title)
+    from .lang import LANGS, normalize
+    ml = normalize(meta_lang)
+    if ml in LANGS and lang not in ("zh", "ja", "ko") and ml not in ("zh", "ja", "ko"):
+        lang = ml
+    return {"title": title, "author": author, "lang": lang, "cover": cover, "chapters": chapters,
+            "toc_used": True}
+
+
 def read_txt(path: Path) -> dict:
     raw = path.read_bytes()
     text = None
@@ -406,7 +511,7 @@ def read_txt(path: Path) -> dict:
 # ---------- создание книги ----------
 def create_book(source: Path, library: Path | None = None, title: str | None = None,
                 fix_breaks: bool = False, source_lang: str | None = None,
-                target_lang: str | None = None) -> tuple[Workspace, dict]:
+                target_lang: str | None = None, on_progress=None) -> tuple[Workspace, dict]:
     """EPUB / TXT / папка с главами → рабочая папка книги. Возвращает (workspace, отчёт).
     source_lang — язык оригинала (по умолчанию определяется по тексту), target_lang — язык перевода."""
     from .lang import normalize
@@ -432,14 +537,24 @@ def create_book(source: Path, library: Path | None = None, title: str | None = N
                     atomic_write(ws.chapters()[m], "\n".join(paras))
             rep.update({"line_breaks_fixed": total, "backup": str(backup)})
         return ws, rep
-    ext = source.suffix.lower()
-    book = read_epub(source) if ext == ".epub" else read_txt(source) if ext in (".txt", ".text") else None
+    ext = ".fb2" if source.name.lower().endswith((".fb2", ".fb2.zip")) else source.suffix.lower()
+    book = (read_epub(source, on_progress) if ext == ".epub" else read_fb2(source) if ext == ".fb2"
+            else read_txt(source) if ext in (".txt", ".text") else None)
     if book is None:
-        raise ValueError(_("Формат {0} не поддерживается: EPUB, TXT или папка с главами").format(ext))
+        raise ValueError(_("Формат {0} не поддерживается: EPUB, FB2, TXT или папка с главами").format(ext))
     if not book["chapters"]:
         raise ValueError(_("Не удалось найти главы в файле"))
     name = re.sub(r'[\\/:*?"<>|]+', " ", title or book["title"] or source.stem).strip()[:80] or "book"
     root = (library or source.parent) / name
+    if Workspace(root).chapters():
+        raise ValueError(_("В {0} уже есть главы ({1}) — выберите другую папку или удалите их").format(
+            Workspace(root).source_dir, len(Workspace(root).chapters())))
+    # Пишем во временную папку и переименовываем в конце: прерванный импорт (приложение закрыли, сбой) не
+    # оставляет полкниги, которая потом мешает повторному импорту.
+    final_root = root
+    root = root.parent / f".importing-{name}"
+    if root.exists():
+        shutil.rmtree(root, ignore_errors=True)
     ws = Workspace(root)
     from .i18n import chapter_file, folder_names
     src_dir, tgt_dir = folder_names()
@@ -456,7 +571,9 @@ def create_book(source: Path, library: Path | None = None, title: str | None = N
     for i, ch in enumerate(book["chapters"], 1):
         paras, cnt = fix_line_breaks(ch["paragraphs"])
         fixed += cnt
-        atomic_write(ws.source_dir / ws.meta["chapter_file"].format(n=i), "\n".join(paras))
+        atomic_write(ws.source_dir / ws.meta["chapter_file"].format(n=i), "\n".join(paras), durable=False)
+        if on_progress and (i % 50 == 0 or i == len(book["chapters"])):
+            on_progress("write", i, len(book["chapters"]))
     if book.get("cover"):
         ext_c = Path(book["cover"][0]).suffix or ".jpg"
         (ws.root / f"cover{ext_c}").write_bytes(book["cover"][1])
@@ -464,7 +581,12 @@ def create_book(source: Path, library: Path | None = None, title: str | None = N
                  json.dumps([{"n": i, "title": ch["title"]} for i, ch in enumerate(book["chapters"], 1)],
                             ensure_ascii=False, indent=1))
     chars = sum(len(p) for ch in book["chapters"] for p in ch["paragraphs"])
-    return ws, {"chapters": len(book["chapters"]), "lang": book["lang"], "target_lang": ws.meta["target_lang"],
+    target_lang_final = ws.meta["target_lang"]
+    if final_root.exists():
+        shutil.rmtree(final_root)  # пустая папка без глав (проверено выше)
+    os.replace(root, final_root)
+    ws = Workspace(final_root)
+    return ws, {"chapters": len(book["chapters"]), "lang": book["lang"], "target_lang": target_lang_final,
                 "title": book["title"],
                 "author": book.get("author", ""), "characters": chars, "cover": bool(book.get("cover")),
                 "split": _("по оглавлению") if book.get("toc_used") else _("по документам/заголовкам"),
@@ -622,4 +744,4 @@ def chapter_titles_from_source(ws: Workspace) -> dict[int, str]:
     return out
 
 
-__all__ = ["create_book", "export_book", "read_epub", "read_txt", "detect_lang", "chapter_number"]
+__all__ = ["create_book", "export_book", "read_epub", "read_fb2", "read_txt", "detect_lang", "chapter_number"]

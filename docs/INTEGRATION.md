@@ -51,7 +51,7 @@ chaquopy {
         version = "3.12"
         pip {
             install("polytome")                              // from PyPI, once published
-            // install("../polytome/dist/polytome-0.4.0-py3-none-any.whl")  // or a local build: python -m build
+            // install("../polytome/dist/polytome-0.5.0-py3-none-any.whl")  // or a local build: python -m build
         }
     }
 }
@@ -119,12 +119,12 @@ const rpc = (method, params = {}) => new Promise((ok) => {
 
 | method | parameters | result |
 |---|---|---|
-| `version` | — | `{"polytome": "0.4.0", "api": 1}` |
+| `version` | — | `{"polytome": "0.5.0", "api": 1}` |
 | `check` | `ping=false` | readiness: a model and a key for every role; `ping` — a short request to the models |
 | `providers` | — | provider catalog: `id, title, local, needs_key, has_key, keys_url, suggest` |
 | `profiles` | — | `quality / balanced / economy / local` with descriptions |
 | `languages` | `source_lang="zh"` | languages for a picker: `code, name, native, script`, which checks exist for the pair (`name_system`, `gender_check`), `default` |
-| `models` | `provider` | the provider's models (its `/models`) |
+| `models` | `provider` | the provider's current models from its `/models`: `id, name`, and when the provider reports them `context`, `price_in` / `price_out` (USD per 1M tokens), `free` |
 | `config_summary` | — | profile, models per role, engine parameters |
 | `import_book` | `source, library?, title?, fix_breaks=false, target_lang?, source_lang?` | book info (+ `import`: the import report). EPUB, TXT or a folder of chapters; the source language is detected from the text |
 | `set_languages` | `book, source_lang?, target_lang?, force=false` | change the target language (with translated chapters — only with `force`) |
@@ -138,6 +138,10 @@ const rpc = (method, params = {}) => new Promise((ok) => {
 | `cancel` | `book` | `{"stopping": true}` |
 | `status` | `book` | progress without LLM: `job.state` (`running / done / cancelled / interrupted / failed`), `done, left, eta_min, tokens_this_run` |
 | `translate_text` | `text, book?, source_lang?, target_lang?, profile?` | translate a fragment; with `book` — names by the book's glossary, without — the language is detected |
+| `translate_meta` | `book, toc=true` | title and author in the target language (a Chinese author — by transcription, no model; «佚名» — “unknown author”) and, with `toc`, titles of not yet translated chapters, so the library and the contents read in the reader's language; done parts are skipped; progress — `toc_progress` events |
+| `explain` | `book, n, paragraph, fragment?, question?` | answer a reader's question about a passage (words, names, terms, idioms) using the book's glossary and bible; `paragraph` counts from 0 → `{answer}` |
+| `suggest_fix` | `book, n, paragraph, instruction?, mode=fix` | a new translation of one paragraph, **not saved**: `fix` corrects the current one by the instruction, `retranslate` translates it anew → `{source, old, new}` |
+| `set_paragraph` | `book, n, paragraph, text` | save a paragraph's translation (the previous text stays in the chapter history) |
 | `export` | `book, fmt="epub"\|"fb2"\|"txt"\|"all", out?, chapters?` | `{"path", "chapters", "missing_total", ...}` |
 
 `chapters` everywhere accepts `"all"`, `"1-10,15"`, a number or a list of numbers. Through `call()`/JSON-RPC

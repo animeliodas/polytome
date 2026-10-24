@@ -113,6 +113,51 @@ def test_book_languages_and_export():
     assert "<dc:language>de</dc:language>" in opf and 'lang="de"' in nav and "Inhalt" in nav, (opf, nav)
 
 
+def test_fb2_import():
+    from polytome.formats import read_fb2
+    tmp = Path(tempfile.mkdtemp())
+    txt = tmp / "novel.txt"
+    txt.write_text("第一章 开始\n黎小白笑了。\n楊心雅看著他。\n第二章 继续\n他走了。\n", encoding="utf-8")
+    ws, _rep = create_book(txt, tmp / "lib", target_lang="en")
+    for n in (1, 2):
+        ws.target_dir.mkdir(parents=True, exist_ok=True)
+        ws.target_path(n).write_text(f"Chapter {n}: Start\nLi Xiaobai smiled.", encoding="utf-8")
+    fb2 = Path(export_book(ws, "fb2", tmp / "book.fb2", title="Test")["path"])
+    back = read_fb2(fb2)
+    assert back["title"] == "Test" and len(back["chapters"]) == 2, back
+    assert back["chapters"][1]["paragraphs"] == ["Chapter 2: Start", "Li Xiaobai smiled."], back["chapters"][1]
+    zp = tmp / "book.fb2.zip"
+    with zipfile.ZipFile(zp, "w") as z:
+        z.write(fb2, "book.fb2")
+    ws2, rep2 = create_book(zp, tmp / "lib2", target_lang="ru")
+    assert rep2["chapters"] == 2 and rep2["lang"] == "en" and ws2.meta["target_lang"] == "ru", rep2
+
+
+def test_interrupted_import_leaves_no_book():
+    from polytome.api import Polytome
+    tmp = Path(tempfile.mkdtemp())
+    txt = tmp / "novel.txt"
+    txt.write_text("".join(f"第{i}章 标题\n黎小白笑了。\n" for i in range(1, 121)), encoding="utf-8")
+
+    def boom(stage, done, total):
+        if stage == "write" and done >= 50:
+            raise KeyboardInterrupt  # как будто приложение закрыли посреди импорта
+
+    try:
+        create_book(txt, tmp / "lib", target_lang="en", on_progress=boom)
+        raise AssertionError("ожидалось прерывание")
+    except KeyboardInterrupt:
+        pass
+    h = Polytome({"target_lang": "en"}, home=tmp)
+    assert h.books(tmp / "lib") == []  # недописанная временная папка — не книга
+    events = []
+    h.listener = events.append
+    info = h.import_book(txt, library=tmp / "lib")
+    assert info["chapters_total"] == 120 and [b["path"] for b in h.books(tmp / "lib")] == [info["path"]]
+    assert not any(p.name.startswith(".importing") for p in (tmp / "lib").iterdir())
+    assert any(e["ev"] == "import_progress" and e["stage"] == "write" for e in events), events[:3]
+
+
 def test_api_languages():
     from polytome.api import Polytome, PolytomeError
     tmp = Path(tempfile.mkdtemp())

@@ -81,6 +81,22 @@ def test_check_and_providers():
     assert any(p["current"] for p in h.profiles())
 
 
+def test_models_metadata():
+    import httpx
+    payload = {"data": [
+        {"id": "b/model", "name": "B", "context_length": 128000, "pricing": {"prompt": "0.0000003", "completion": "0.0000012"}},
+        {"id": "a/free:free", "pricing": {"prompt": "0", "completion": "0"}},
+        {"id": "c/plain"},  # большинство провайдеров отдают только id
+    ]}
+    h = Polytome(CONFIG, home=Path(tempfile.mkdtemp()))
+    h.llm.http = httpx.Client(transport=httpx.MockTransport(lambda req: httpx.Response(200, json=payload)))
+    ms = h.models("openrouter")
+    assert [m["id"] for m in ms] == ["a/free:free", "b/model", "c/plain"], ms
+    assert ms[1]["price_in"] == 0.3 and ms[1]["price_out"] == 1.2 and ms[1]["context"] == 128000
+    assert ms[0].get("free") and "price_in" not in ms[2] and ms[2]["name"] == "c/plain"
+    assert h.llm.list_models(h.cfg.resolve("openrouter:_")) == ["a/free:free", "b/model", "c/plain"]
+
+
 def test_legacy_book_folder():
     tmp = Path(tempfile.mkdtemp())
     h = Polytome(CONFIG, home=tmp)
@@ -133,7 +149,9 @@ def test_events_listener():
     book = h.import_book(_novel(tmp))["path"]
     eng = h._engine(book)
     eng.emit("chapter_start", n=1, segments=3)
-    assert got and got[0]["ev"] == "chapter_start" and got[0]["book"] == book and got[0]["n"] == 1, got
+    starts = [e for e in got if e["ev"] == "chapter_start"]
+    assert starts and starts[0]["book"] == book and starts[0]["n"] == 1, got
+    assert any(e["ev"] == "import_progress" for e in got), got  # импорт тоже сообщает о прогрессе
 
 
 def test_server_stdio():
@@ -146,11 +164,80 @@ def test_server_stdio():
     srv = Server(CONFIG, home=tmp, out=out)
     for r in reqs:  # синхронно, без потоков — порядок ответов предсказуем
         srv.handle(r)
-    resp = {m["id"]: m for m in map(json.loads, out.getvalue().splitlines())}
+    msgs = list(map(json.loads, out.getvalue().splitlines()))
+    resp = {m["id"]: m for m in msgs if "id" in m}
+    assert any(m.get("method") == "event" and m["params"]["ev"] == "import_progress" for m in msgs)
     assert resp[1]["result"] == "pong"
     assert resp[2]["result"]["profile"] == "economy"
     assert resp[3]["result"]["chapters_total"] == 2
     assert resp[4]["error"]["code"] == -32601
+
+
+def test_reader_help():
+    """Помощь читателю: вариант правки абзаца (без сохранения), сохранение, объяснение фрагмента."""
+    import httpx
+    from polytome.workspace import Workspace
+    tmp = Path(tempfile.mkdtemp())
+    h = Polytome(CONFIG, home=tmp / "home")
+    book = h.import_book(_novel(tmp))["path"]
+    src = h.chapter(book, 1)["source"]
+    tr = ["Глава 1. Начало", "Ли Сяобай улыбнулся.", "Ян Синья смотрела на него."]
+    Workspace(book).save_state(1, {"segments": [{"id": i + 1, "src": s, "tr": t} for i, (s, t) in enumerate(zip(src, tr))]})
+    seen = []
+
+    def reply(req):
+        user = json.loads(req.content)["messages"][-1]["content"]
+        seen.append(user)
+        asked = "Вопрос читателя" in user or "Reader's question" in user
+        text = "Это имя героя." if asked else "Ли Сяобай широко улыбнулся."
+        return httpx.Response(200, json={"choices": [{"message": {"content": text}, "finish_reason": "stop"}],
+                                         "usage": {}})
+
+    h.llm.http = httpx.Client(transport=httpx.MockTransport(reply))
+    r = h.suggest_fix(book, 1, 1, "добавь «широко»")
+    assert r["source"] == "黎小白笑了。" and r["old"] == tr[1] and r["new"] == "Ли Сяобай широко улыбнулся.", r
+    assert h.chapter(book, 1)["translation"][1] == tr[1]  # вариант ещё не сохранён
+    h.set_paragraph(book, 1, 1, r["new"])
+    assert h.chapter(book, 1)["translation"][1] == "Ли Сяобай широко улыбнулся."
+    a = h.explain(book, 1, 1, "Ли Сяобай", "Кто это?")
+    assert a["answer"] == "Это имя героя." and "黎小白笑了。" in seen[-1] and "Кто это?" in seen[-1], seen[-1]
+    out = json.loads(h.call("explain", {"book": book, "n": 1, "paragraph": 2}))
+    assert out["ok"] and out["result"]["answer"], out
+    bad = json.loads(h.call("set_paragraph", {"book": book, "n": 1, "paragraph": 9, "text": "x"}))
+    assert not bad["ok"], bad
+
+
+def test_translate_meta():
+    """Название, автор и оглавление на языке перевода до перевода глав; «佚名» — «автор неизвестен», не имя."""
+    import re
+    import httpx
+    from polytome.workspace import Workspace
+    tmp = Path(tempfile.mkdtemp())
+    h = Polytome(CONFIG, home=tmp / "home")
+    book = h.import_book(_novel(tmp))["path"]
+    ws = Workspace(book)
+    ws.meta["author"] = "佚名"
+    ws.save_meta()
+    assert not h.book_info(book)["meta_translated"]
+    names = {"novel": "Роман", "第一章 开始": "Глава 1. Начало", "第二章 继续": "Глава 2. Продолжение", "佚名": "Anonymous"}
+
+    def reply(req):
+        user = json.loads(req.content)["messages"][-1]["content"]
+        out = [f"[{m.group(1)}] {names.get(m.group(2).strip(), 'X')}"
+               for m in (re.match(r"^\[(\d+)\] (.*)$", ln) for ln in user.split("\n")) if m]
+        return httpx.Response(200, json={"choices": [{"message": {"content": "\n".join(out)}, "finish_reason": "stop"}],
+                                         "usage": {}})
+
+    h.llm.http = httpx.Client(transport=httpx.MockTransport(reply))
+    r = h.translate_meta(book)
+    info = h.book_info(book)
+    assert r["title"] == info["title"] == "Роман" and info["meta_translated"] and r["toc_translated"] == 2, (r, info)
+    assert info["author"] == ("Автор неизвестен" if info["target_lang"] == "ru" else "Anonymous"), info
+    assert info["original_title"] == "novel"
+    toc = h.chapters(book)
+    assert [c["title"] for c in toc] == ["Глава 1. Начало", "Глава 2. Продолжение"], toc
+    assert toc[0]["source_title"] == "第一章 开始" and not toc[0]["translated"]
+    assert h.translate_meta(book)["toc_translated"] == 0  # уже переведённое не переводится заново
 
 
 if __name__ == "__main__":

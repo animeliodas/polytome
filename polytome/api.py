@@ -119,12 +119,13 @@ class Polytome:
     def config_summary(self) -> dict:
         return self.cfg.summary()
 
-    def models(self, provider: str) -> list[str]:
-        """Модели провайдера (запрос к его /models)."""
+    def models(self, provider: str) -> list[dict]:
+        """Модели провайдера прямо из его /models (всегда актуальный список): [{"id", "name", "context"?,
+        "price_in"?, "price_out"? (USD за 1 млн токенов), "free"?}]."""
         prov = self.cfg.providers().get(provider)
         if prov is None:
             raise PolytomeError(_("Нет провайдера {0}").format(provider))
-        return self.llm.list_models(self.cfg.resolve(f"{provider}:_"))
+        return self.llm.list_models_info(self.cfg.resolve(f"{provider}:_"))
 
     def check(self, ping: bool = False) -> dict:
         """Готовность к переводу: у каждой роли есть модель и ключ; ping=True — короткий запрос к каждой модели."""
@@ -168,7 +169,10 @@ class Polytome:
             lib.mkdir(parents=True, exist_ok=True)
         try:
             ws, rep = create_book(src, lib, title, fix_breaks=fix_breaks, source_lang=source_lang,
-                                  target_lang=target_lang or self.cfg.target_lang)
+                                  target_lang=target_lang or self.cfg.target_lang,
+                                  on_progress=lambda stage, done, total: self._emit(None, {
+                                      "ev": "import_progress", "source": str(src), "stage": stage, "done": done,
+                                      "total": total}))
         except ValueError as e:
             raise PolytomeError(str(e)) from None
         info = self.book_info(ws.root)
@@ -208,7 +212,8 @@ class Polytome:
         lib = Path(library) if library else self.home / "books"
         if not lib.is_dir():
             return []
-        return [self.book_info(p) for p in sorted(lib.iterdir()) if p.is_dir() and is_book(p)]
+        return [self.book_info(p) for p in sorted(lib.iterdir())
+                if p.is_dir() and not p.name.startswith(".") and is_book(p)]
 
     def book_info(self, book: str | Path) -> dict:
         ws = self._ws(book)
@@ -218,6 +223,7 @@ class Polytome:
         m = ws.meta
         tl = m.get("target_lang", "ru")
         return {"path": str(ws.root), "title": m.get(f"title_{tl}") or m.get("title"),
+                "meta_translated": bool(m.get(f"title_{tl}")) or m.get("source_lang") == tl,
                 "original_title": m.get("original_title") or m.get("title"), "author": m.get(f"author_{tl}") or
                 m.get("author", ""), "source_lang": m.get("source_lang"), "target_lang": tl,
                 "chapters_total": st["chapters_total"], "chapters_translated": st["chapters_translated"],
@@ -228,6 +234,8 @@ class Polytome:
         """Оглавление: номер, заголовок оригинала и перевода, готовность главы."""
         ws = self._ws(book)
         src_titles = {x["n"]: x["title"] for x in (read_json(ws.meta_dir / "source_map.json", []) or [])}
+        toc_tr = {int(k): v for k, v in (read_json(ws.meta_dir / f"toc_{ws.meta.get('target_lang', 'ru')}.json", {})
+                                        or {}).items()}
         job = ws.interrupted_job()
         partial = set(job["partial"]) if job else set()
         out = []
@@ -236,7 +244,7 @@ class Polytome:
             if ws.is_translated(n):
                 with open(ws.target_path(n), encoding="utf-8-sig") as f:
                     tr_title = next((ln.strip() for ln in f if ln.strip()), None)
-            out.append({"n": n, "title": tr_title or src_titles.get(n) or _("Глава {0}").format(n),
+            out.append({"n": n, "title": tr_title or toc_tr.get(n) or src_titles.get(n) or _("Глава {0}").format(n),
                         "source_title": src_titles.get(n), "translated": ws.is_translated(n) and n not in partial,
                         "partial": n in partial})
         return out
@@ -366,6 +374,44 @@ class Polytome:
         cfg = self.cfg.with_overrides(profile=profile) if profile else self.cfg
         return Engine(ws, cfg, self.llm).translate_text(text)
 
+    def translate_meta(self, book: str | Path, toc: bool = True) -> dict:
+        """Название и автор на языке перевода (автор из иероглифов — транскрипцией, без модели) и, если toc,
+        заголовки ещё не переведённых глав — чтобы библиотека и оглавление сразу были на языке читателя.
+        Уже переведённое не переводится заново. Прогресс оглавления — событиями toc_progress."""
+        eng = self._engine(book)
+        eng.ensure_title_meta()
+        n = eng.translate_toc() if toc else 0
+        info = self.book_info(book)
+        return {"title": info["title"], "author": info["author"], "toc_translated": n}
+
+    # ------------------------------------------------------------------ помощь читателю
+    def explain(self, book: str | Path, n: int, paragraph: int, fragment: str = "", question: str = "") -> dict:
+        """Объяснить фрагмент абзаца (слова, имена, термины, идиомы) с учётом глоссария и библии книги.
+        paragraph — номер абзаца главы с 0; fragment — то, что выделил читатель (пусто — весь абзац)."""
+        ch = self.chapter(book, n)
+        src = _nth(ch.get("source"), paragraph)
+        tr = _nth(ch.get("translation"), paragraph) if ch.get("aligned") else ""
+        return {"answer": self._engine(book).explain(src, tr, fragment, question)}
+
+    def suggest_fix(self, book: str | Path, n: int, paragraph: int, instruction: str = "",
+                    mode: str = "fix") -> dict:
+        """Вариант перевода абзаца — не сохраняется (сохранить: set_paragraph). mode: fix — поправить готовый
+        перевод по указанию; retranslate — перевести абзац заново. → {"source", "old", "new"}."""
+        r = self._engine(book).suggest_segment(int(n), int(paragraph), instruction, mode)
+        if not r["new"]:
+            raise PolytomeError(_("Модель не вернула перевод абзаца"))
+        return r
+
+    def set_paragraph(self, book: str | Path, n: int, paragraph: int, text: str) -> dict:
+        """Сохранить перевод абзаца (paragraph — с 0). Прежний текст остаётся в истории главы."""
+        ws = self._ws(book)
+        st = ws.load_state(int(n)) or {}
+        segs = st.get("segments") or []
+        if not 0 <= int(paragraph) < len(segs):
+            raise PolytomeError(_("В главе {0} нет абзаца {1}").format(n, int(paragraph) + 1))
+        ws.set_segment(int(n), segs[int(paragraph)]["id"], text, by="user")
+        return {"ok": True}
+
     # ------------------------------------------------------------------ сборка
     def export(self, book: str | Path, fmt: str = "epub", out: str | Path | None = None,
                chapters: Any = None) -> dict | list[dict]:
@@ -387,7 +433,7 @@ class Polytome:
     METHODS = ("version", "providers", "profiles", "languages", "set_languages", "config_summary", "models", "check",
                "import_book", "books",
                "book_info", "chapters", "chapter", "estimate", "translate", "resume", "cancel", "status",
-               "translate_text", "export")
+               "translate_text", "translate_meta", "explain", "suggest_fix", "set_paragraph", "export")
 
     def call(self, method: str, params: dict | str | None = None) -> str:
         """Вызов по имени с JSON-параметрами → JSON-строка {"ok": true, "result": ...} или
@@ -403,6 +449,11 @@ class Polytome:
         except Exception as e:  # noqa: BLE001
             return json.dumps({"ok": False, "error": {"type": type(e).__name__, "message": str(e)}},
                               ensure_ascii=False)
+
+
+def _nth(items: list | None, i: int) -> str:
+    items = items or []
+    return items[int(i)] if 0 <= int(i) < len(items) else ""
 
 
 def _brief(r: dict) -> dict:

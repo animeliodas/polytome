@@ -37,6 +37,10 @@ _SURNAME_CHARS = set("李王張张劉刘陳陈楊杨趙赵黃黄周吳吴徐孫�
                      "廖鄒邹熊金陸陆郝孔白崔康毛邱秦江史顧顾侯邵孟龍龙萬万段雷錢钱湯汤尹黎易常武喬乔賀贺賴赖龔龚文")
 
 
+# «Автор неизвестен» по-китайски — переводить как пометку, а не транскрибировать как имя
+ANONYMOUS_AUTHORS = {"佚名", "未知", "匿名", "无名氏", "無名氏", "未知作者", "作者未知"}
+
+
 def strip_think(s: str) -> str:
     s = _THINK.sub("", s or "")
     if "</think>" in s:
@@ -703,12 +707,25 @@ class Engine:
                 changed = True
             except LLMError:
                 pass
-        au = ws.meta.get("author", "")
-        if not ws.meta.get(ak) and au and 2 <= han_count(au) <= 4 and self.translit(au, "person"):
-            ws.meta[ak] = self.translit(au, "person")
-            changed = True
+        au = ws.meta.get("author", "").strip()
+        if not ws.meta.get(ak) and au and self.pair.src.code != self.pair.tgt.code:
+            if au in ANONYMOUS_AUTHORS:  # «佚名» — не имя, а «автор неизвестен»
+                ws.meta[ak] = self.P.m("anonymous_author") if self.P.ru else self._quiet_translate(au)
+            elif 2 <= han_count(au) <= 4 and self.translit(au, "person"):
+                ws.meta[ak] = self.translit(au, "person")
+            else:
+                ws.meta[ak] = self._quiet_translate(au)
+            changed = bool(ws.meta.get(ak)) or changed
+            if not ws.meta.get(ak):
+                ws.meta.pop(ak, None)
         if changed:
             ws.save_meta()
+
+    def _quiet_translate(self, text: str) -> str:
+        try:
+            return self.translate_text(text).strip().strip("«»\"")
+        except LLMError:
+            return ""
 
     def _bible_is_template(self) -> bool:
         b = self.ws.bible()
@@ -848,30 +865,57 @@ class Engine:
 
     # ---------- точечные операции ----------
     def retranslate_segments(self, n: int, ids: list[int], instruction: str = "", mode: str = "retranslate") -> list[dict]:
-        st = self.ws.load_state(n)
-        if not st or st.get("unaligned"):
-            raise ValueError(_("Глава {0}: нет посегментного перевода").format(n))
+        st = self._aligned_state(n)
         segs = st["segments"]
         out = []
         for sid in ids:
             s = next((x for x in segs if x["id"] == sid), None)
             if s is None:
                 continue
-            ents = self.gl.relevant(s["src"])
-            idx = segs.index(s)
-            if mode == "fix" and s.get("tr"):
-                new = self._fix_segment(s["src"], s["tr"], instruction or "исправь ошибки", ents)  # i18n: skip
-            else:
-                seam = [x for x in segs[max(0, idx - self.seam):idx] if x.get("tr")]
-                new = self._translate_batch(n, [s], seam, segs[idx + 1:idx + 3], ents, instruction).get(sid)
+            new = self._redo_segment(n, segs, s, instruction, mode)
             if new:
                 if s.get("tr"):
                     s.setdefault("history", []).append({"by": "agent-retranslate", "old": s["tr"], "why": instruction})
-                new = self.norm_text(new)
                 s["tr"], s["by"] = new, "agent"
                 out.append({"id": sid, "new": new})
         self.ws.save_state(n, st)
         return out
+
+    def suggest_segment(self, n: int, index: int, instruction: str = "", mode: str = "fix") -> dict:
+        """Вариант перевода абзаца index (0 — первый абзац главы) — без сохранения: читатель сначала посмотрит."""
+        segs = self._aligned_state(n)["segments"]
+        if not 0 <= index < len(segs):
+            raise ValueError(_("В главе {0} нет абзаца {1}").format(n, index + 1))
+        s = segs[index]
+        new = self._redo_segment(n, segs, s, instruction, mode)
+        return {"id": s["id"], "source": s["src"], "old": s.get("tr") or "", "new": new or ""}
+
+    def _aligned_state(self, n: int) -> dict:
+        st = self.ws.load_state(n)
+        if not st or st.get("unaligned"):
+            raise ValueError(_("Глава {0}: нет посегментного перевода").format(n))
+        return st
+
+    def _redo_segment(self, n: int, segs: list[dict], s: dict, instruction: str, mode: str) -> str | None:
+        ents = self.gl.relevant(s["src"])
+        idx = segs.index(s)
+        if mode == "fix" and s.get("tr"):
+            new = self._fix_segment(s["src"], s["tr"], instruction or self.P.m("fix_default"), ents)
+        else:
+            seam = [x for x in segs[max(0, idx - self.seam):idx] if x.get("tr")]
+            new = self._translate_batch(n, [s], seam, segs[idx + 1:idx + 3], ents, instruction).get(s["id"])
+        return self.norm_text(new) if new else None
+
+    def explain(self, source: str, translation: str = "", fragment: str = "", question: str = "") -> str:
+        """Ответ читателю о фрагменте книги: слова, имена, термины, идиомы — с опорой на глоссарий и библию."""
+        entries = self.gl.relevant(source + "\n" + translation)
+        msgs = [{"role": "system", "content": self.P.m("explain_system", tgt=self.pair.tgt.name)},
+                {"role": "user", "content": self.P.m(
+                    "explain_user", gl=self._glossary_text(entries) if entries else "—",
+                    bible=self.ws.bible()[:2500] or "—", src=source or "—", tr=translation or "—",
+                    frag=fragment or source, q=question or self.P.m("explain_default_q"))}]
+        res = self.llm.chat(self._translator(), msgs, temperature=0.3, max_tokens=2000, role="explain")
+        return strip_think(res.content).strip()
 
     # ---------- редактура готового перевода ----------
     def cast_table(self) -> str:
@@ -1004,14 +1048,46 @@ class Engine:
 
     def translate_text(self, text: str) -> str:
         from .workspace import split_paragraphs
-        segs = [{"id": i + 1, "src": p, "tr": None} for i, p in enumerate(split_paragraphs(text))]
-        entries = self.gl.relevant(text)
-        batches = self._batches(segs)
-        for bi, b in enumerate(batches):
+        src = split_paragraphs(text)
+        return "\n\n".join(t or _("[НЕ ПЕРЕВЕДЕНО] {0}").format(s) for s, t in zip(src, self.translate_lines(src)))
+
+    def translate_lines(self, lines: list[str]) -> list[str | None]:
+        """Перевести список строк (абзацы, заголовки) по глоссарию книги и с починкой; None — не удалось."""
+        segs = [{"id": i + 1, "src": p, "tr": None} for i, p in enumerate(lines)]
+        entries = self.gl.relevant("\n".join(lines))
+        for b in self._batches(segs):
             first = segs.index(b[0])
             self._fill(0, b, [s for s in segs[max(0, first - self.seam):first] if s.get("tr")], [], entries)
         self._repair(0, segs, entries)
-        return "\n\n".join(s.get("tr") or _("[НЕ ПЕРЕВЕДЕНО] {0}").format(s['src']) for s in segs)
+        return [s.get("tr") for s in segs]
+
+    # ---------- оглавление на языке перевода ----------
+    def toc_path(self) -> Path:
+        return self.ws.meta_dir / f"toc_{self.pair.tgt.code}.json"
+
+    def translated_toc(self) -> dict[int, str]:
+        return {int(k): v for k, v in (read_json(self.toc_path(), {}) or {}).items()}
+
+    def translate_toc(self, chunk: int = 60) -> int:
+        """Заголовки ещё не переведённых глав — чтобы оглавление сразу было на языке читателя. Сохраняется
+        после каждой пачки (прерванный перевод не теряется). → сколько заголовков переведено сейчас."""
+        if self.pair.src.code == self.pair.tgt.code:
+            return 0
+        titles = {x["n"]: x["title"] for x in (read_json(self.ws.meta_dir / "source_map.json", []) or [])
+                  if x.get("title")}
+        done = self.translated_toc()
+        todo = [n for n in self.ws.chapters() if n in titles and n not in done and not self.ws.is_translated(n)]
+        count = 0
+        for i in range(0, len(todo), chunk):
+            part = todo[i:i + chunk]
+            for n, tr in zip(part, self.translate_lines([titles[n] for n in part])):
+                if tr:
+                    done[n] = tr.strip()
+                    count += 1
+            atomic_write(self.toc_path(), json.dumps({str(k): v for k, v in sorted(done.items())},
+                                                    ensure_ascii=False, indent=1))
+            self.emit("toc_progress", done=min(i + chunk, len(todo)), total=len(todo))
+        return count
 
     # ---------- извлечение терминов ----------
     def _scanned_path(self) -> Path:

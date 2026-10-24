@@ -196,7 +196,31 @@ class LLMClient:
         )
 
     def list_models(self, ref: ModelRef) -> list[str]:
+        return [m["id"] for m in self.list_models_info(ref)]
+
+    def list_models_info(self, ref: ModelRef) -> list[dict]:
+        """Модели провайдера из его /models: id, название, контекст и цена за 1 млн токенов, если провайдер их
+        сообщает (OpenRouter — да, большинство — только id). Провайдеры меняют список — он всегда свежий."""
         headers = {"Authorization": f"Bearer {ref.api_key}"} if ref.api_key else {}
         r = self.http.get(f"{ref.base_url}/models", headers=headers, timeout=30)
         r.raise_for_status()
-        return sorted(m["id"] for m in r.json().get("data", []))
+        out = []
+        for m in r.json().get("data", []):
+            if not isinstance(m, dict) or not m.get("id"):
+                continue
+            item = {"id": m["id"], "name": m.get("name") or m["id"]}
+            ctx = m.get("context_length") or (m.get("top_provider") or {}).get("context_length")
+            if ctx:
+                item["context"] = int(ctx)
+            pricing = m.get("pricing") or {}
+            try:
+                if "prompt" in pricing:
+                    item["price_in"] = round(float(pricing["prompt"]) * 1_000_000, 4)
+                if "completion" in pricing:
+                    item["price_out"] = round(float(pricing["completion"]) * 1_000_000, 4)
+            except (TypeError, ValueError):
+                pass
+            if item.get("price_in") == 0 and item.get("price_out") == 0:
+                item["free"] = True
+            out.append(item)
+        return sorted(out, key=lambda x: x["id"])

@@ -160,6 +160,17 @@ MESSAGES = {
                    "the instruction. Change only what the instruction requires; leave the rest as it is. "
                    "Answer — only the corrected paragraph, on one line."),
     "fix_user": "Original:\n{src}\n\nCurrent translation:\n{tr}\n\nInstruction: {instruction}",
+    "fix_default": ("Check the translation against the original and fix errors: meaning, omissions, names and terms "
+                    "by the glossary, characters' gender. If there are no errors, return the translation as it is."),
+    "explain_system": ("You help a reader of a translated book. The reader selected a passage and asks about it. "
+                       "Answer in {tgt}, briefly and to the point (3–8 sentences): what the words, names, terms, "
+                       "idioms and cultural references mean, how it reads in the original and why it was translated "
+                       "this way. Rely on the book's glossary and bible; do not invent plot that is not in the passage "
+                       "or the bible, and do not reveal what comes later."),
+    "explain_user": ("Glossary:\n{gl}\n\nBook bible:\n{bible}\n\nParagraph in the original:\n{src}\n\n"
+                     "Paragraph in translation:\n{tr}\n\nThe passage asked about: «{frag}»\n\nReader's question: {q}"),
+    "explain_default_q": "Explain unclear words, names, terms and expressions in this passage.",
+    "anonymous_author": "Unknown author",
     "hint_full": "Translate the paragraph IN FULL, without shortening or skipping anything.",
     "hint_script": "Remove every leftover character of the original: everything must be in {tgt}.",
     "hint_gender": ("Gender error: {msg}. Fix the gender of pronouns and agreement referring to this character "

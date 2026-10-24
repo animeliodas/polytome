@@ -121,7 +121,7 @@
  "Профиль [{0}]: ": "Profile [{0}]: ",
  "Сценарии: docs/SCENARIOS.ru.md. Без команды: polytome <папка книги> — диалог с агентом.": "Scenarios: docs/SCENARIOS.md. Without a command: polytome <book folder> — chat with the agent.",
  "Таблица персонажей пуста: задайте пол через glossary_set (kind=person, gender)": "The character table is empty: set genders with glossary_set (kind=person, gender)",
- "Формат {0} не поддерживается: EPUB, TXT или папка с главами": "Format {0} is not supported: EPUB, TXT or a folder of chapters",
+ "Формат {0} не поддерживается: EPUB, FB2, TXT или папка с главами": "Format {0} is not supported: EPUB, FB2, TXT or a folder of chapters",
  "Формат: epub | fb2 | txt": "Format: epub | fb2 | txt",
  "Часть {0}": "Part {0}",
  "Эту книгу уже переводит другой процесс (polytome CLI / Hermes)": "Another process is already translating this book (polytome CLI / Hermes)",
@@ -308,5 +308,6 @@
  "язык перевода по умолчанию для новых книг (en, ru, es…)": "default target language for new books (en, ru, es…)",
  "язык перевода: en, ru, es, ja… (по умолчанию — из настроек или язык системы)": "target language: en, ru, es, ja… (default — from settings or the system language)",
  "… ещё {0}": "… {0} more",
- "⊘ {0}: LLM предлагала «{1}», оставлен Палладий «{2}»": "⊘ {0}: the LLM suggested «{1}», kept the deterministic «{2}»"
+ "⊘ {0}: LLM предлагала «{1}», оставлен Палладий «{2}»": "⊘ {0}: the LLM suggested «{1}», kept the deterministic «{2}»",
+ "Модель не вернула перевод абзаца": "The model returned no translation of the paragraph"
 }
