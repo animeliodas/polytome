@@ -682,7 +682,14 @@ def cmd_bench(a, cfg):
                 if e.get("ev") == "bench_progress":
                     console.print(_("  гл.{0}/{1}: {2}").format(e["chapter"], e["chapters"], e["stage"]))
 
-            rec = bench.run(cfg, model, pair, cfg.base_dir or Path.cwd(), on_event=show, keep=a.keep)
+            rec = bench.run(cfg, model, pair, cfg.base_dir or Path.cwd(), on_event=show, keep=a.keep,
+                            budget=a.budget or None)
+            if rec.get("error") == "budget":
+                console.print(_("  [yellow]не уложилась в лимит {0:,} токенов[/yellow] — для перевода книг слишком "
+                                "расточительна").format(a.budget))
+                if not a.no_save:
+                    console.print(_("  сохранено: {0}").format(bench.save(rec, results)))
+                continue
             if rec.get("error"):
                 console.print(_("  [red]ошибка:[/red] {0}").format(rec["error"]))
                 continue
@@ -988,6 +995,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--results", default="bench/results", help=_("куда сохранять результаты"))
     p.add_argument("--no-save", action="store_true", help=_("не сохранять результат"))
     p.add_argument("--keep", action="store_true", help=_("оставить рабочую папку прогона для разбора"))
+    p.add_argument("--budget", type=int, default=100_000, help=_("лимит токенов на прогон (0 — без лимита)"))
     p.add_argument("--leaderboard", action="store_true", help=_("собрать bench/LEADERBOARD.md из результатов"))
     p = sub.add_parser("models", help=_("модели провайдера"))
     p.add_argument("provider", nargs="?")

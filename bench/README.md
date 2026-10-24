@@ -16,14 +16,19 @@ another model's opinion:
 
 The table of all submitted results: **[LEADERBOARD.md](LEADERBOARD.md)**.
 
+**Limits.** The checks catch what code can see — not style and not a wrong meaning (a mistranslated term passes if
+names, gender and numbers are right). Strong models reach 100, and at the top they differ in speed and tokens. Each
+result file contains the translation itself, so you can read and compare.
+
 ## Run
 
 ```
 polytome bench -m openrouter:deepseek/deepseek-chat -p zh-ru -p en-ru
 ```
 
-`-m` can be repeated to compare several models; the default is your translator model. A run of one pair costs
-roughly 20–40 thousand tokens. Results are saved to `bench/results/<pair>/<date>_<model>.json`. In the Bayun app:
+`-m` can be repeated to compare several models; the default is your translator model. A run of one pair usually
+costs 3–50 thousand tokens. A run stops at 100,000 tokens (`--budget`): a model that needs more is too wasteful for
+books and is listed as "did not fit the token budget" (small reasoning models can burn hundreds of thousands). Results are saved to `bench/results/<pair>/<date>_<model>.json`. In the Bayun app:
 Settings → Translation → "Check model", then "Share result".
 
 ## Add your result
@@ -55,6 +60,10 @@ version (`suite`) are kept but not mixed into the table.
 
 Таблица всех присланных результатов: **[LEADERBOARD.md](LEADERBOARD.md)**.
 
+**Ограничения.** Проверки ловят то, что видит код, — не стиль и не искажённый смысл (неверно понятый термин пройдёт,
+если имена, род и числа в порядке). Сильные модели получают 100, и наверху они различаются скоростью и токенами.
+В каждом файле результата есть сам перевод — его можно прочитать и сравнить.
+
 ## Запуск
 
 ```
@@ -62,7 +71,9 @@ polytome bench -m openrouter:deepseek/deepseek-chat -p zh-ru -p en-ru
 ```
 
 `-m` можно повторить, чтобы сравнить несколько моделей; по умолчанию — ваша модель-переводчик. Прогон одной пары
-стоит примерно 20–40 тысяч токенов. Результаты сохраняются в `bench/results/<пара>/<дата>_<модель>.json`.
+обычно стоит 3–50 тысяч токенов. На 100 000 токенов прогон останавливается (`--budget`): модель, которой нужно
+больше, для книг слишком расточительна и попадает в список «не уложились в лимит» (маленькие рассуждающие модели
+могут сжечь сотни тысяч). Результаты сохраняются в `bench/results/<пара>/<дата>_<модель>.json`.
 В приложении Баюн: Настройки → Перевод → «Проверить модель», затем «Поделиться результатом».
 
 ## Как добавить свой результат

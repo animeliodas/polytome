@@ -19,6 +19,7 @@ import shutil
 import statistics
 import threading
 import time
+import uuid
 from pathlib import Path
 
 from . import __version__
@@ -28,10 +29,19 @@ from .config import ROLES, Config
 from .engine import Engine
 from .glossary import Glossary
 from .i18n import _
-from .llm import LLMClient
+from .llm import LLMClient, LLMError
 from .workspace import Workspace, atomic_write
 
 SCHEMA = 1
+
+# Жёсткий лимит токенов на один прогон пары. Обычный прогон — 3–50 тыс.; модель, которой нужно больше, для перевода
+# книг слишком расточительна (маленькие «рассуждающие» модели теряют абзацы, и переспросы с длинными рассуждениями
+# съедали сотни тысяч токенов). Лимит проверяется перед каждым запросом: перерасход — не больше одного запроса.
+BUDGET = 100_000
+
+
+class BudgetExceeded(LLMError):
+    pass
 
 
 def _pct(ok: int, total: int) -> float:
@@ -52,13 +62,14 @@ def info() -> dict:
         # системный промпт ~3–4 тыс. токенов на запрос; запросов ~ по одному на главу + починка
         out.append({"pair": pair, "chapters": len(suite.chapters(src)), "segments": segs, "source_chars": chars,
                     "tokens_estimate": len(suite.chapters(src)) * 3 * 4000 + chars * (3 if src == "zh" else 1)})
-    return {"suite": suite.suite_version(), "pairs": out}
+    return {"suite": suite.suite_version(), "budget": BUDGET, "pairs": out}
 
 
 def run(cfg: Config, model: str, pair: str, home: Path, on_event=None, cancel: threading.Event | None = None,
-        keep: bool = False, llm: LLMClient | None = None) -> dict:
+        keep: bool = False, llm: LLMClient | None = None, budget: int | None = BUDGET) -> dict:
     """Перевести набор пары моделью model («провайдер:модель») и оценить. Ничего не пишет в библиотеку:
-    рабочая папка временная (keep=True — оставить для разбора)."""
+    рабочая папка временная (keep=True — оставить для разбора). budget — лимит токенов на прогон (None — без
+    лимита): превысила — прогон останавливается, результат с error="budget"."""
     if pair not in suite.PAIRS:
         raise ValueError(_("Нет пары {0} в наборе. Есть: {1}").format(pair, ", ".join(suite.PAIRS)))
     src, tgt = pair.split("-")
@@ -66,8 +77,22 @@ def run(cfg: Config, model: str, pair: str, home: Path, on_event=None, cancel: t
     cfg = cfg.with_overrides(roles={r: model for r in ROLES})
     ref = cfg.role("translator")[0]
     llm = llm or LLMClient(cfg.parallel)
+    cancel = cancel or threading.Event()
+    over_budget = threading.Event()
+    if budget:
+        plain_chat = llm.chat
 
-    root = home / ".bench" / f"{pair}-{time.strftime('%Y%m%d-%H%M%S')}"
+        def chat_within_budget(*a, **kw):
+            if llm.usage.total() >= budget:
+                over_budget.set()
+                cancel.set()  # остановить и циклы движка, а не только этот запрос
+                raise BudgetExceeded(_("лимит {0} токенов на прогон исчерпан").format(budget))
+            return plain_chat(*a, **kw)
+
+        llm.chat = chat_within_budget
+
+    # своя папка на каждый прогон: параллельные прогоны в одну секунду не мешают друг другу
+    root = home / ".bench" / f"{pair}-{time.strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
     from .i18n import chapter_file, folder_names
     src_dir, tgt_dir = folder_names()
     ws = Workspace(root)
@@ -83,8 +108,7 @@ def run(cfg: Config, model: str, pair: str, home: Path, on_event=None, cancel: t
     gl.save()
 
     eng = Engine(ws, cfg, llm, on_event=lambda e: emit({**e, "bench": True}))
-    if cancel is not None:
-        eng.cancel = cancel
+    eng.cancel = cancel
     t0 = time.time()
     total = first_ok = final_ok = missing = 0
     issues_first: dict[str, int] = {}
@@ -126,6 +150,10 @@ def run(cfg: Config, model: str, pair: str, home: Path, on_event=None, cancel: t
     except Exception as e:  # noqa: BLE001 — провайдер недоступен, модель не существует: это тоже результат
         error = f"{type(e).__name__}: {str(e)[:300]}"
     finally:
+        if over_budget.is_set() or (budget and llm.usage.total() > budget):  # и если перевалила последним запросом
+            error = "budget"
+        if budget:
+            llm.chat = plain_chat
         if not keep:
             shutil.rmtree(root, ignore_errors=True)
 
@@ -154,6 +182,8 @@ def run(cfg: Config, model: str, pair: str, home: Path, on_event=None, cancel: t
     }
     if error:
         rec["error"] = error
+        if error == "budget":
+            rec["budget"] = budget
     emit({"ev": "bench_done", "result": {k2: v for k2, v in rec.items() if k2 != "translation"}})
     return rec
 
@@ -221,7 +251,7 @@ def load(results_dir: Path) -> list[dict]:
             r = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        if r.get("schema") == SCHEMA and not r.get("error"):
+        if r.get("schema") == SCHEMA and r.get("error") in (None, "budget"):  # «не уложилась в лимит» — тоже итог
             out.append(r)
     return out
 
@@ -229,19 +259,26 @@ def load(results_dir: Path) -> list[dict]:
 def leaderboard(results: list[dict], suite_version: str | None = None) -> str:
     """Таблица Markdown по парам: медиана по прогонам модели; только текущая версия набора."""
     sv = suite_version or suite.suite_version()
-    rows = [r for r in results if r.get("suite") == sv]
+    over = [r for r in results if r.get("suite") == sv and r.get("error") == "budget"]
+    rows = [r for r in results if r.get("suite") == sv and not r.get("error")]
     lines = ["# Polytome model leaderboard / Таблица моделей", "",
              f"Suite / набор: `{sv}`. Score = average of the paragraphs clean right after translation and after "
              "the code-guided repair (0–100); checks are deterministic (names, gender, numbers, leftovers, omissions). "
              "Median over runs. Add your run: see [README.md](README.md).", "",
              "Score — среднее долей абзацев без серьёзных замечаний сразу после перевода и после починки (0–100); "
-             "проверки — кодом (имена, род, числа, остатки оригинала, пропуски). Медиана по прогонам.", ""]
+             "проверки — кодом (имена, род, числа, остатки оригинала, пропуски). Медиана по прогонам.", "",
+             "**Limits / Ограничения.** The checks catch errors code can see — not style or a wrong meaning; strong models "
+             "reach 100, and at the top they differ in speed and tokens. Every result file contains the translation: "
+             "read it. / Проверки ловят ошибки, видимые коду, — не стиль и не искажённый смысл; сильные модели "
+             "получают 100, и наверху они различаются скоростью и токенами. В каждом файле результата есть сам "
+             "перевод — его стоит прочитать.", ""]
     for pair in suite.PAIRS:
         by_model: dict[str, list[dict]] = {}
         for r in rows:
             if r["pair"] == pair:
                 by_model.setdefault(r["model"], []).append(r)
-        if not by_model:
+        wasteful = sorted({r["model"] for r in over if r["pair"] == pair} - set(by_model))
+        if not by_model and not wasteful:
             continue
         lines += [f"## {pair}", "",
                   "| Model | Runs | Score | First pass | After repair | Sec / 1k chars | Tokens / 1k chars | $ / 1M chars | Last run |",
@@ -265,6 +302,9 @@ def leaderboard(results: list[dict], suite_version: str | None = None) -> str:
             lines.append(f"| `{m}` | {runs} | {f(sc, '{:.1f}')} | {f(fp, '{:.0f}%')} | {f(fo, '{:.0f}%')} | "
                          f"{f(sp, '{:.1f}')} | {f(tk, '{:.0f}')} | {f(cost, '${:.2f}')} | {last} |")
         lines.append("")
-    if len(lines) <= 7:
+        if wasteful:
+            lines += [f"Did not fit the token budget ({BUDGET:,} per run) / Не уложились в лимит токенов: "
+                      + ", ".join(f"`{m}`" for m in wasteful), ""]
+    if not any(ln.startswith("## ") for ln in lines):
         lines.append("_No results yet / Результатов пока нет._")
     return "\n".join(lines) + "\n"

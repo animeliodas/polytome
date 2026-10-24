@@ -17,3 +17,7 @@ eval/out/
 *.log
 eval/COMPARE.md
 .scratch/
+
+# рабочие папки замеров моделей (polytome bench)
+.bench/
+.bench-runs/

@@ -320,6 +320,40 @@ def test_bench():
     llm3.http = httpx.Client(transport=httpx.MockTransport(cancel_on_request))
     mid = bench.run(h.cfg, "openrouter:test-model", "zh-ru", tmp / "home", cancel=late, llm=llm3)
     assert mid.get("error") == "cancelled", mid
+    # жёсткий лимит токенов: «рассуждающая» модель, которая жжёт токены, останавливается и помечается
+    def wasteful(req):
+        resp = good(req)
+        if req.url.path.endswith("/models"):
+            return resp
+        data = json.loads(resp.content)
+        data["usage"] = {"prompt_tokens": 3000, "completion_tokens": 30000}
+        return httpx.Response(200, json=data)
+
+    llm4 = LLMClient(2)
+    llm4.http = httpx.Client(transport=httpx.MockTransport(wasteful))
+    over = bench.run(h.cfg, "openrouter:burner", "zh-ru", tmp / "home", llm=llm4, budget=50_000)
+    used = over["tokens"]["prompt"] + over["tokens"]["completion"]
+    assert over.get("error") == "budget" and over["budget"] == 50_000, over
+    assert 50_000 <= used <= 50_000 + 33_000, used  # перерасход — не больше одного запроса
+    bench.save(over, res)
+    md = bench.leaderboard(bench.load(res))
+    assert "Did not fit the token budget" in md and "`openrouter:burner`" in md, md
+    assert md.count("`openrouter:burner`") == 1  # не в таблице, только в списке «не уложились»
+
+    # параллельные прогоны, начатые в одну секунду, не делят рабочую папку
+    outs = []
+
+    def go():
+        lc = LLMClient(2)
+        lc.http = httpx.Client(transport=httpx.MockTransport(good))
+        outs.append(bench.run(h.cfg, "openrouter:test-model", "en-ru", tmp / "home", llm=lc))
+
+    ths = [threading.Thread(target=go) for _ in range(3)]
+    for t in ths:
+        t.start()
+    for t in ths:
+        t.join()
+    assert len(outs) == 3 and all("error" not in o for o in outs), [o.get("error") for o in outs]
     out = json.loads(h.call("bench", {"model": "no-colon"}))
     assert not out["ok"], out
 
