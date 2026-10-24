@@ -1,0 +1,54 @@
+{
+ "schema": 1,
+ "suite": "2-f65479b1",
+ "polytome": "0.6.2",
+ "date": "2026-10-24",
+ "model": "ollama-cloud:glm-5.2",
+ "provider": "ollama-cloud",
+ "pair": "es-en",
+ "segments": 18,
+ "source_chars": 1887,
+ "first_pass_ok": 100.0,
+ "final_ok": 100.0,
+ "traps_ok": 100.0,
+ "traps_failed": [],
+ "score": 100.0,
+ "missing_after_draft": 0,
+ "issues_first": {},
+ "issues_final": {},
+ "calls": 2,
+ "seconds": 5.7,
+ "sec_per_1k_chars": 3.0,
+ "tokens": {
+  "prompt": 2180,
+  "completion": 822
+ },
+ "tokens_per_1k_chars": 1591,
+ "price_per_1m_tokens": null,
+ "cost_usd": null,
+ "cost_per_1m_chars_usd": null,
+ "translation": {
+  "1": [
+   "Chapter 1. A Visitor on a Rainy Night",
+   "It had been raining in Peñaseca for three days. In the spring, Lucía Romero's older sister had left for Madrid, and since then Lucía ran the village's little apothecary shop on her own.",
+   "As night fell, she closed the shutters, counted the day's earnings, blew out the lamp, and went upstairs.",
+   "She had barely lain down when someone pounded on the door below. A man's voice called out: \"Is anyone there?\"",
+   "On the threshold stood a young man, soaked to the bone, his left arm wrapped in a bloodstained cloth. He said his name was Diego Lobo and that he belonged to the Azure Dragon Society.",
+   "\"I need someone to tend to this,\" Lobo said in a low voice. \"I can pay. Will three thousand five hundred reales be enough?\"",
+   "He pulled a letter wrapped in waxed paper from his jacket. \"This letter has to reach the monastery of San Blas before the eighteenth of May.\"",
+   "For Lucía, treating that wound would be a piece of cake, but the letter unsettled her.",
+   "Even so, she didn't take his money and only said: \"At dawn tomorrow I'll take you up the mountain.\""
+  ],
+  "2": [
+   "Chapter 2: The Mountain Path",
+   "At daybreak they set out on the road. Lucía carried a basket on her back with bread, medicinal herbs, and an old umbrella.",
+   "Halfway up the slope they came upon old Tomás Gil, who was splitting firewood. He set down his axe and told them in a low voice that the afternoon before, three strangers had asked at the village entrance about a wounded young man.",
+   "\"Take the path, Lucía,\" said Tomás Gil. \"The main road isn't safe.\" Lucía thanked him.",
+   "The path was narrow and slippery. Lucía went ahead, planting each step firmly. Lobo followed her in silence.",
+   "By midday the rain had stopped, the mist slowly cleared, and in the distance the roof of the monastery of San Blas came into view. Waiting at the door was a nun, Sister Inés, in charge of receiving visitors.",
+   "Sister Inés took the letter, examined the red seal, and nodded. \"The abbess has been waiting 2 years for this letter.\"",
+   "Lobo said to Lucía: \"I owe you my life.\" Lucía smiled: \"Then next time you come, fix the roof of my apothecary.\" Lobo stayed at the monastery.",
+   "At dusk, Lucía came down the mountain alone. By the time she reached home it was already night; she lit the lamp and sat behind the counter for a long while."
+  ]
+ }
+}

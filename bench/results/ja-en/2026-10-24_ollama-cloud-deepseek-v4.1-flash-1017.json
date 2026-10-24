@@ -1,0 +1,54 @@
+{
+ "schema": 1,
+ "suite": "2-f65479b1",
+ "polytome": "0.7.0",
+ "date": "2026-10-24",
+ "model": "ollama-cloud:deepseek-v4.1-flash:1017",
+ "provider": "ollama-cloud",
+ "pair": "ja-en",
+ "segments": 18,
+ "source_chars": 852,
+ "first_pass_ok": 100.0,
+ "final_ok": 100.0,
+ "traps_ok": 100.0,
+ "traps_failed": [],
+ "score": 100.0,
+ "missing_after_draft": 0,
+ "issues_first": {},
+ "issues_final": {},
+ "calls": 2,
+ "seconds": 5.3,
+ "sec_per_1k_chars": 6.2,
+ "tokens": {
+  "prompt": 2288,
+  "completion": 1400
+ },
+ "tokens_per_1k_chars": 4329,
+ "price_per_1m_tokens": null,
+ "cost_usd": null,
+ "cost_per_1m_chars_usd": null,
+ "translation": {
+  "1": [
+   "Chapter 1: A Guest on a Rainy Night",
+   "The rain in Ishikawa had been falling for three days straight. Haruka Sato's elder sister had left for the capital in the spring, and ever since, Haruka had been running the town's little pharmacy all by herself.",
+   "When the sun went down, she closed the shutters, counted the day's takings, blew out the lamp, and went up to the second floor.",
+   "No sooner had she lain down than a furious knocking came at the door below, and a man's voice called out. \"Is anyone there?\"",
+   "In the doorway stood a young man, soaked to the bone. Blood was seeping through the cloth wrapped around his left arm. He gave his name as Ken'ichi Mori and said he was with the Azure Dragon Society.",
+   "\"I'd like you to see to my wound,\" Mori said quietly. \"I'll pay. Will three thousand five hundred yen be enough?\"",
+   "Mori drew a letter wrapped in oiled paper from inside his coat. \"This letter has to reach Seifu by the eighteenth of May.\"",
+   "Haruka sighed to herself. It was the season for buying in medicinal herbs, and she was so busy she'd have borrowed a cat's paws if she could.",
+   "Even so, Haruka did not take the money. \"Early tomorrow morning,\" was all she said, \"I'll take you up the mountain.\""
+  ],
+  "2": [
+   "Chapter 2: The Mountain Path",
+   "As soon as dawn broke, the two of them set out. Haruka carried a basket on her back; inside were rice balls, medicinal herbs, and an old umbrella.",
+   "Halfway up the mountain they met Shigeru Tanaka, an old man splitting firewood. The old man set down his axe and lowered his voice. Yesterday evening, he said, three strangers had been going around the town entrance asking about a young man who had been injured.",
+   "\"Haruka, take the back road,\" Tanaka said. \"The main road is dangerous.\" Haruka thanked him.",
+   "The back road was narrow and slippery. Haruka went first, planting each step firmly. Mori followed behind in silence.",
+   "At noon the rain stopped, the mountain mist slowly cleared, and in the distance the roof of Seifu Temple came into view. A nun stood before the gate. She was a woman named Shizuka Yamamoto, who looked after guests at the temple.",
+   "Yamamoto took the letter, checked the red seal on it, and nodded. \"The head priest has waited two years for this letter.\"",
+   "Mori said to Haruka, \"She saved my life.\" Haruka laughed and answered, \"Then next time you come, fix the roof of the medicine shop.\" Mori stayed at the temple.",
+   "In the evening, Haruka went down the mountain alone. By the time she reached home it was already dark; she lit the lamp and sat for a long while at the back of the shop counter."
+  ]
+ }
+}

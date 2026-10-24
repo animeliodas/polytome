@@ -1,52 +1,54 @@
 {
  "schema": 1,
- "suite": "1-f97c7303",
- "polytome": "0.6.1",
+ "suite": "2-f65479b1",
+ "polytome": "0.7.0",
  "date": "2026-10-24",
  "model": "ollama-cloud:mistral-large-4",
  "provider": "ollama-cloud",
  "pair": "zh-en",
  "segments": 18,
- "source_chars": 806,
+ "source_chars": 634,
  "first_pass_ok": 100.0,
  "final_ok": 100.0,
+ "traps_ok": 100.0,
+ "traps_failed": [],
  "score": 100.0,
  "missing_after_draft": 0,
  "issues_first": {},
  "issues_final": {},
  "calls": 4,
- "seconds": 205.2,
- "sec_per_1k_chars": 254.6,
+ "seconds": 297.8,
+ "sec_per_1k_chars": 469.7,
  "tokens": {
-  "prompt": 4686,
-  "completion": 24507
+  "prompt": 4414,
+  "completion": 19647
  },
- "tokens_per_1k_chars": 36220,
+ "tokens_per_1k_chars": 37951,
  "price_per_1m_tokens": null,
  "cost_usd": null,
  "cost_per_1m_chars_usd": null,
  "translation": {
   "1": [
    "Chapter 1: A Guest on a Rainy Night",
-   "It had been raining in Qingshi Town for three full days. Lin Xiaoyu closed the door of the pharmacy and lit the last lamp. She was twenty-two years old, and after her father's death, she had been holding up this small pharmacy all by herself.",
-   "\"Is anyone there?\" A man's voice came from outside the door.",
-   "Lin Xiaoyu hesitated for a moment, but opened the door anyway. Standing at the entrance was a young man, soaked through, his left hand pressed against his right arm, blood seeping through his fingers. He said his name was Chen Ziming, and that he was from the provincial capital.",
-   "\"I need to get this bandaged,\" Chen Ziming said quietly. \"Can I pay you? Would 120 yuan be enough?\"",
-   "She didn't take his money. She just told him to sit beside the counter and turned to get gauze and medicinal wine. The wound wasn't deep, but it was long, as if cut open by a knife. As she cleaned the wound, she asked him how he had been injured.",
-   "Chen Ziming was silent for a long time before he said, \"I ran into a few people on the road. They wanted a letter I was carrying.\" He took an oil-paper packet from his chest and placed it on the table. \"This letter must be delivered to Baiyun Temple before May 18th.\"",
-   "Lin Xiaoyu glanced out the window. Baiyun Temple was up in the mountains, forty li from Qingshi Town, and the mountain roads were hardest to travel in the rain. She remembered what her father used to say: when you save someone, you must see it through to the end.",
-   "\"I'll take you up the mountain first thing tomorrow morning,\" she said. \"You can sleep in the back room tonight.\""
+   "The rain in Qingshi had been falling for three full days. Lin Xiaoyu's sister had gone to the capital in spring, and ever since, she'd been the only one looking after the small pharmacy in town.",
+   "After dark, she closed up the doors and windows, counted the day's earnings, blew out the oil lamp, and went upstairs.",
+   "She had barely lain down when urgent knocking came from downstairs, followed by a man's voice: \"Anyone there?\"",
+   "Outside the door stood a young man drenched through, his left arm wrapped in a blood-soaked bandage. He said his name was Bai Yun, and that he was from the Azure Dragon Society.",
+   "\"I need to have my wound bandaged,\" Bai Yun said in a low voice. \"Can I pay you? Would three thousand five hundred wen be enough?\"",
+   "He pulled a letter wrapped in oil paper from his chest. \"This letter must reach Qingfeng before the eighteenth of May.\"",
+   "As she bandaged him, he said with a wry smile, \"If my fiancée knew I was knocking on a young woman's door in the middle of the night, she'd be jealous for sure.\"",
+   "Lin Xiaoyu didn't take his money. \"Early tomorrow morning,\" she said, \"I'll take you up the mountain.\""
   ],
   "2": [
    "Chapter 2: The Mountain Road",
-   "Before dawn, Lin Xiaoyu woke Chen Ziming. She slung a bamboo basket on her back, filled with dried provisions, medicinal herbs, and an old umbrella. Chen Ziming's arm had healed somewhat, but his face was still pale.",
-   "When they reached the mountainside, they met the elderly woodcutter Zhou Dashan. Zhou Dashan knew Lin Xiaoyu and asked with a smile where she was headed so early.",
-   "\"To deliver medicine to Baiyun,\" Lin Xiaoyu replied. She didn't mention the letter.",
-   "Zhou Dashan glanced at Chen Ziming and lowered his voice. \"Yesterday at dusk, three outsiders were asking about an injured young man at the town entrance. Be careful.\"",
-   "Chen Ziming's face turned even paler. Lin Xiaoyu thanked the old man, led Chen Ziming off the main road, and onto a narrow path known only to herb gatherers. The path was narrow and slippery; she walked ahead, planting each step firmly.",
-   "At noon, the rain finally stopped. The mist in the mountains slowly dispersed, revealing the roof of Baiyun in the distance. Standing at the temple gate was a Buddhist nun named Zhao Qiuyue, the temple's guest attendant.",
-   "Zhao Qiuyue took the oil-paper parcel, examined the red seal on the closure, and nodded. \"The Master has been waiting for this letter for 2 years,\" she said. \"You've had a hard journey.\"",
-   "On the way back, Chen Ziming said to Lin Xiaoyu, \"I owe you my life.\" Lin Xiaoyu smiled and said, \"Then when you come to Qingshi next time, help me repair the roof of the pharmacy.\""
+   "It was just dawn when the two of them set out. Lin Xiaoyu carried a bamboo basket on her back, filled with dried provisions, medicinal herbs, and an old umbrella.",
+   "On the mountainside, they met an old woodcutter, Zhou Dashan. The old man set down his axe and lowered his voice. \"Yesterday evening, three outsiders were asking about an injured young man at the town entrance.\"",
+   "\"Xiaoyu, you should take the small path,\" Zhou Dashan said. \"The main road isn't safe.\" Lin Xiaoyu thanked him.",
+   "The small path was narrow and slippery. Lin Xiaoyu walked ahead, planting each step firmly. Bai Yun followed behind, not saying a word.",
+   "At noon the rain stopped. The mist in the mountains slowly dispersed, and in the distance the roof of Qingfeng Temple came into view. Standing at the temple gate was a nun named Zhao Qiuyue, the guest attendant in charge of receiving visitors at the temple.",
+   "Zhao Qiuyue took the letter, examined the red seal on the flap, and nodded. \"The abbot has been waiting for this letter for two years.\"",
+   "Bai Yun said to Lin Xiaoyu, \"I owe you my life.\" Lin Xiaoyu smiled. \"Then next time you come, help me repair the roof of the pharmacy.\" Bai Yun stayed at the temple.",
+   "In the evening, Lin Xiaoyu descended the mountain alone. When she arrived home, it was already dark. She lit the lamp and sat behind the counter for a long time."
   ]
  }
 }

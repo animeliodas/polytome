@@ -51,7 +51,7 @@ chaquopy {
         version = "3.12"
         pip {
             install("polytome")                              // from PyPI, once published
-            // install("../polytome/dist/polytome-0.6.2-py3-none-any.whl")  // or a local build: python -m build
+            // install("../polytome/dist/polytome-0.7.0-py3-none-any.whl")  // or a local build: python -m build
         }
     }
 }
@@ -119,7 +119,7 @@ const rpc = (method, params = {}) => new Promise((ok) => {
 
 | method | parameters | result |
 |---|---|---|
-| `version` | — | `{"polytome": "0.6.2", "api": 1}` |
+| `version` | — | `{"polytome": "0.7.0", "api": 1}` |
 | `check` | `ping=false` | readiness: a model and a key for every role; `ping` — a short request to the models |
 | `providers` | — | provider catalog: `id, title, local, needs_key, has_key, keys_url, suggest` |
 | `profiles` | — | `quality / balanced / economy / local` with descriptions |
@@ -143,7 +143,7 @@ const rpc = (method, params = {}) => new Promise((ok) => {
 | `suggest_fix` | `book, n, paragraph, instruction?, mode=fix` | a new translation of one paragraph, **not saved**: `fix` corrects the current one by the instruction, `retranslate` translates it anew → `{source, old, new}` |
 | `set_paragraph` | `book, n, paragraph, text` | save a paragraph's translation (the previous text stays in the chapter history) |
 | `bench_info` | — | the model bench: suite version, language pairs, size and a rough token estimate per pair |
-| `bench` | `model?, pair=zh-ru, save_dir?, budget=100000` | run a model on the shared test texts and score it with the code checks → a result record (no keys, no server addresses; see [bench/README.md](../bench/README.md)); progress — `bench_progress`, end — `bench_done` |
+| `bench` | `model?, pair=zh-ru, save_dir?, budget=100000` | run a model on the shared test texts (7 source languages → ru/en, meaning traps) and score it with code → a result record (no keys, no server addresses; see [bench/README.md](../bench/README.md)); progress — `bench_progress`, end — `bench_done` |
 | `bench_cancel` | — | stop the running bench |
 | `export` | `book, fmt="epub"\|"fb2"\|"txt"\|"all", out?, chapters?` | `{"path", "chapters", "missing_total", ...}` |
 

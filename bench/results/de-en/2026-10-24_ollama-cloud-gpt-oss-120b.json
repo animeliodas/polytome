@@ -1,0 +1,59 @@
+{
+ "schema": 1,
+ "suite": "2-f65479b1",
+ "polytome": "0.6.2",
+ "date": "2026-10-24",
+ "model": "ollama-cloud:gpt-oss:120b",
+ "provider": "ollama-cloud",
+ "pair": "de-en",
+ "segments": 18,
+ "source_chars": 1900,
+ "first_pass_ok": 100.0,
+ "final_ok": 100.0,
+ "traps_ok": 87.5,
+ "traps_failed": [
+  {
+   "id": "idiom",
+   "why": "Tomaten auf den Augen — не замечать, помидоры ни при чём"
+  }
+ ],
+ "score": 95.8,
+ "missing_after_draft": 0,
+ "issues_first": {},
+ "issues_final": {},
+ "calls": 2,
+ "seconds": 8.3,
+ "sec_per_1k_chars": 4.4,
+ "tokens": {
+  "prompt": 2171,
+  "completion": 1976
+ },
+ "tokens_per_1k_chars": 2183,
+ "price_per_1m_tokens": null,
+ "cost_usd": null,
+ "cost_per_1m_chars_usd": null,
+ "translation": {
+  "1": [
+   "Chapter 1: A Guest in the Rainy Night",
+   "In Felsheim it had been raining for three days. In the spring Anna Weber's older sister had gone to Berlin, and since then Anna had run the village's small pharmacy alone.",
+   "At dusk she shut the shutters, counted the day's earnings, blew out the lamp, and went upstairs.",
+   "No sooner had she lain down than there was a vigorous knock at the door below. A man's voice called, “Is anyone there?”",
+   "Standing in the doorway was a young man, soaked to the skin, his left arm wrapped in a bloody cloth. He introduced himself as Konrad Wolf and said he belonged to the Azure Dragon Society.",
+   "“I need a bandage,” Wolf said softly. “I can pay. Is three thousand five hundred Mark enough?”",
+   "He pulled a letter wrapped in oil‑paper from his jacket. “This letter must be at the Steinbach monastery before the eighteenth of May.”",
+   "Anna must have had tomatoes on her eyes: only now did she notice how pale he was.",
+   "Nevertheless she did not take his money and simply said, “Tomorrow morning I’ll take you to the mountains.”"
+  ],
+  "2": [
+   "Chapter 2: The Mountain Path",
+   "At daybreak they set out. Anna carried a basket on her back, containing bread, medicinal herbs and an old umbrella.",
+   "Halfway up they met the old Hans Becker, who was chopping wood. He set the axe aside and said quietly that the previous evening three strangers had inquired at the village entrance about an injured young man.",
+   "“Take the path, Anna,” said Hans Becker. “The country road is not safe.” Anna thanked him.",
+   "The path was narrow and slippery. Anna went ahead, placing each step carefully. Wolf followed her in silence.",
+   "Around noon the rain stopped, the fog lifted slowly, and in the distance the roof of Steinbach Abbey appeared. At the gate stood a nun, Sister Hildegard, who received guests at the abbey.",
+   "Sister Hildegard took the letter, examined the red seal and nodded. “The abbess has been waiting for this letter for 2 years.”",
+   "Wolf said to Anna, “I owe you my life.” Anna smiled, “Then next time you can repair the roof of my pharmacy.” Wolf stayed at the abbey.",
+   "In the evening Anna descended the mountain alone. When she reached home it was already dark; she lit the lamp and sat for a long time behind the shop counter."
+  ]
+ }
+}

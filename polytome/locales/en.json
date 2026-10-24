@@ -320,7 +320,6 @@
  "куда сохранять результаты": "where to save results",
  "не сохранять результат": "do not save the result",
  "оставить рабочую папку прогона для разбора": "keep the run's working folder for inspection",
- "пара языков: zh-ru, zh-en, en-ru (можно несколько)": "language pair: zh-ru, zh-en, en-ru (can be repeated)",
  "провайдер:модель (можно несколько; по умолчанию — переводчик)": "provider:model (can be repeated; default — the translator)",
  "проверить модель на общем наборе текстов (качество — проверками кода)": "score a model on the shared test texts (quality by code checks)",
  "собрать bench/LEADERBOARD.md из результатов": "build bench/LEADERBOARD.md from the results",
@@ -328,5 +327,6 @@
  "лимит {0} токенов на прогон исчерпан": "the budget of {0} tokens per run is used up",
  "  [yellow]не уложилась в лимит {0:,} токенов[/yellow] — для перевода книг слишком расточительна": "  [yellow]did not fit the budget of {0:,} tokens[/yellow] — too wasteful for translating books",
  "лимит токенов на прогон (0 — без лимита)": "token budget per run (0 — no limit)",
- "модель не дала ни одного ответа — возможно, это не чат-модель": "the model gave no answer at all — it may not be a chat model"
+ "модель не дала ни одного ответа — возможно, это не чат-модель": "the model gave no answer at all — it may not be a chat model",
+ "пара языков: zh-ru, ja-ru, fr-en… или all (можно несколько)": "language pair: zh-ru, ja-ru, fr-en… or all (can be repeated)"
 }

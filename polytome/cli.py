@@ -674,6 +674,9 @@ def cmd_bench(a, cfg):
         return
     models = a.model or [cfg.role_specs("translator")[0][0]]
     pairs = a.pair or ["zh-ru"]
+    if "all" in pairs:
+        from .bench_suite import PAIRS
+        pairs = list(PAIRS)
     for model in models:
         for pair in pairs:
             console.print(f"[bold]{model}[/bold] · {pair}…")
@@ -991,7 +994,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--book", help=_("задать профиль только этой книге"))
     p = sub.add_parser("bench", help=_("проверить модель на общем наборе текстов (качество — проверками кода)"))
     p.add_argument("-m", "--model", action="append", help=_("провайдер:модель (можно несколько; по умолчанию — переводчик)"))
-    p.add_argument("-p", "--pair", action="append", help=_("пара языков: zh-ru, zh-en, en-ru (можно несколько)"))
+    p.add_argument("-p", "--pair", action="append", help=_("пара языков: zh-ru, ja-ru, fr-en… или all (можно несколько)"))
     p.add_argument("--results", default="bench/results", help=_("куда сохранять результаты"))
     p.add_argument("--no-save", action="store_true", help=_("не сохранять результат"))
     p.add_argument("--keep", action="store_true", help=_("оставить рабочую папку прогона для разбора"))

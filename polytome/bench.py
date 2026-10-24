@@ -5,7 +5,9 @@
 числа, пропуски, повторы. Считаются:
 - first_pass_ok — доля абзацев без серьёзных замечаний сразу после перевода (насколько модель понимает задачу);
 - final_ok — после починки (что получит читатель);
-- score — среднее этих двух (0–100);
+- traps_ok — доля пройденных ловушек со смыслом (идиомы, имена-слова, опущенное подлежащее, числа и даты
+  прописью — правильный ответ известен заранее, см. bench_suite);
+- score — среднее этих трёх (0–100);
 - скорость, токены и цена (если провайдер сообщает цены) — на 1000 знаков оригинала.
 
 Результат — JSON без ключей и адресов серверов: его можно прислать в общий репозиторий (bench/results), из всех
@@ -167,14 +169,17 @@ def run(cfg: Config, model: str, pair: str, home: Path, on_event=None, cancel: t
         calls = sum(r["calls"] for r in llm.usage.by_role.values())
     chars = _source_chars(src)
     price = _price(llm, cfg, ref)
+    tr_result = check_traps(translation, src, tgt) if len(translation) == len(chs) else {"ok": 0, "total": 0, "failed": []}
+    traps_ok = _pct(tr_result["ok"], tr_result["total"])
     cost = round(prompt * price["in"] / 1e6 + completion * price["out"] / 1e6, 5) if price else None
     k = chars / 1000 if chars else 1
     rec = {
         "schema": SCHEMA, "suite": suite.suite_version(), "polytome": __version__,
         "date": time.strftime("%Y-%m-%d"), "model": f"{ref.provider}:{ref.model}", "provider": ref.provider,
         "pair": pair, "segments": total, "source_chars": chars,
-        "first_pass_ok": _pct(first_ok, total), "final_ok": _pct(final_ok, total),
-        "score": round((_pct(first_ok, total) + _pct(final_ok, total)) / 2, 1) if total else 0.0,
+        "first_pass_ok": _pct(first_ok, total), "final_ok": _pct(final_ok, total), "traps_ok": traps_ok,
+        "traps_failed": tr_result["failed"],
+        "score": round((_pct(first_ok, total) + _pct(final_ok, total) + traps_ok) / 3, 1) if total else 0.0,
         "missing_after_draft": missing, "issues_first": issues_first, "issues_final": issues_final,
         "calls": calls, "seconds": seconds, "sec_per_1k_chars": round(seconds / k, 1),
         "tokens": {"prompt": prompt, "completion": completion},
@@ -191,9 +196,49 @@ def run(cfg: Config, model: str, pair: str, home: Path, on_event=None, cancel: t
     return rec
 
 
+# Служебные слова исходного языка, которых не бывает в английском: несколько в абзаце перевода — абзац не переведён.
+_STOPWORDS = {
+    "fr": {"le", "la", "les", "des", "est", "une", "qui", "dans", "pour", "avec", "elle", "sur", "était", "pas", "mais"},
+    "de": {"der", "das", "und", "nicht", "ist", "mit", "sie", "ein", "eine", "auf", "dem", "den", "war", "sich"},
+    "es": {"el", "los", "las", "que", "una", "con", "por", "para", "del", "pero", "ella", "estaba", "muy"},
+}
+
+
+def _latin_leftover(src_code: str, tgt_script: str, tr: str) -> bool:
+    if tgt_script == "cyrillic":  # перевод на кириллицу: латиницы почти не должно быть (имена — по глоссарию)
+        letters = [c for c in tr if c.isalpha()]
+        return len(letters) >= 20 and sum(1 for c in letters if c.isascii() or "\u00c0" <= c <= "\u024f") > len(letters) * 0.3
+    words = re.findall(r"[a-zà-ÿ]+", tr.lower())
+    return sum(1 for w in words if w in _STOPWORDS.get(src_code, set())) >= 3
+
+
 # При обычном переводе это мягкие замечания (имя законно заменить местоимением), но в замерах тексты известны:
 # пропавшее число или имя, которое в абзаце оригинала есть, — ошибка модели.
 SERIOUS_SOFT = {"number", "name_missing"}
+
+
+# Типографика не должна решать за смысл: неразрывные дефисы и пробелы, типографские апострофы — к обычным.
+_TYPO = str.maketrans({"\u2010": "-", "\u2011": "-", "\u2012": "-", "\u00a0": " ", "\u202f": " ", "\u2009": " ",
+                       "\u2019": "'", "\u02bc": "'"})
+
+
+def check_traps(translation: dict[str, list[str]], src: str, tgt: str) -> dict:
+    """Ловушки со смыслом по готовому переводу: {"ok", "total", "failed": [{"id", "why"}]}.
+    translation — {"1": [заголовок, абзацы…], "2": […]}, как в записи результата."""
+    translation = {k: [(p or "").translate(_TYPO) for p in v] for k, v in translation.items()}
+    failed = []
+    items = suite.traps(src, tgt)
+    for t in items:
+        if t["ch"] is None:
+            text = "\n".join(p for ch in translation.values() for p in ch)
+        else:
+            paras = translation.get(str(t["ch"])) or []
+            text = paras[t["p"]] if t["p"] < len(paras) else ""
+        ok = bool(text) and all(re.search(r, text, re.I) for r in t["require"]) and \
+            not any(re.search(r, text, re.I) for r in t["forbid"])
+        if not ok:
+            failed.append({"id": t["id"], "why": t["why"]})
+    return {"ok": len(items) - len(failed), "total": len(items), "failed": failed}
 
 
 def _hard_by_segment(segs: list[dict], eng: Engine, stems: set[str]) -> dict[int, list[str]]:
@@ -202,6 +247,8 @@ def _hard_by_segment(segs: list[dict], eng: Engine, stems: set[str]) -> dict[int
         types = [i["type"] for i in check_segment(s["src"], s.get("tr"), eng.gl.relevant(s["src"]), stems, eng.gl,
                                                   eng.pair)
                  if i["level"] == "hard" or i["type"] in SERIOUS_SOFT]
+        if s.get("tr") and eng.pair.src.script == "latin" and _latin_leftover(eng.pair.src.code, eng.pair.tgt.script, s["tr"]):
+            types.append("untranslated")
         if s.get("tr") and not eng.pair.cjk_to_alphabetic:
             # для пар без иероглифов движок длину абзаца не проверяет — здесь грубо: вдвое короче или длиннее
             a, b = len(re.sub(r"\s", "", s["src"])), len(re.sub(r"\s", "", s["tr"]))
@@ -265,16 +312,20 @@ def leaderboard(results: list[dict], suite_version: str | None = None) -> str:
     over = [r for r in results if r.get("suite") == sv and r.get("error") == "budget"]
     rows = [r for r in results if r.get("suite") == sv and not r.get("error")]
     lines = ["# Polytome model leaderboard / Таблица моделей", "",
-             f"Suite / набор: `{sv}`. Score = average of the paragraphs clean right after translation and after "
-             "the code-guided repair (0–100); checks are deterministic (names, gender, numbers, leftovers, omissions). "
-             "Median over runs. Add your run: see [README.md](README.md).", "",
-             "Score — среднее долей абзацев без серьёзных замечаний сразу после перевода и после починки (0–100); "
-             "проверки — кодом (имена, род, числа, остатки оригинала, пропуски). Медиана по прогонам.", "",
-             "**Limits / Ограничения.** The checks catch errors code can see — not style or a wrong meaning; strong models "
-             "reach 100, and at the top they differ in speed and tokens. Every result file contains the translation: "
-             "read it. / Проверки ловят ошибки, видимые коду, — не стиль и не искажённый смысл; сильные модели "
-             "получают 100, и наверху они различаются скоростью и токенами. В каждом файле результата есть сам "
-             "перевод — его стоит прочитать.", ""]
+             f"Suite / набор: `{sv}`. Score = average of three shares (0–100): paragraphs clean right after "
+             "translation, clean after the code-guided repair, and meaning traps passed (idioms, names that are "
+             "ordinary words, dropped subjects, numbers and dates in words — the right answer is known in advance). "
+             "All checks are code, no model judges another. Median over runs. Add your run: see [README.md](README.md).",
+             "",
+             "Score — среднее трёх долей (0–100): абзацы без серьёзных замечаний сразу после перевода, после починки и "
+             "пройденные ловушки со смыслом (идиомы, имена-слова, опущенное подлежащее, числа и даты прописью — "
+             "правильный ответ известен заранее). Всё проверяет код, модели друг друга не судят. Медиана по прогонам.",
+             "",
+             "**Limits / Ограничения.** Style is not measured; 8 traps per pair catch typical mistakes of mid-level models "
+             "but do not separate the strongest ones, which pass them all. Every result file contains the translation — "
+             "read it. / Стиль не оценивается; 8 ловушек на пару ловят типичные ошибки моделей среднего уровня, но не "
+             "различают самых сильных — те проходят все. В каждом файле результата есть сам перевод — его стоит "
+             "прочитать.", ""]
     for pair in suite.PAIRS:
         by_model: dict[str, list[dict]] = {}
         for r in rows:
@@ -284,8 +335,8 @@ def leaderboard(results: list[dict], suite_version: str | None = None) -> str:
         if not by_model and not wasteful:
             continue
         lines += [f"## {pair}", "",
-                  "| Model | Runs | Score | First pass | After repair | Sec / 1k chars | Tokens / 1k chars | $ / 1M chars | Last run |",
-                  "|---|---:|---:|---:|---:|---:|---:|---:|---|"]
+                  "| Model | Runs | Score | First pass | After repair | Traps | Sec / 1k chars | Tokens / 1k chars | $ / 1M chars | Last run |",
+                  "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
 
         def med(rs, key):
             vals = [r[key] for r in rs if r.get(key) is not None]
@@ -294,16 +345,16 @@ def leaderboard(results: list[dict], suite_version: str | None = None) -> str:
         stats = []
         for model, rs in by_model.items():
             stats.append((model, len(rs), med(rs, "score"), med(rs, "first_pass_ok"), med(rs, "final_ok"),
-                          med(rs, "sec_per_1k_chars"), med(rs, "tokens_per_1k_chars"), med(rs, "cost_per_1m_chars_usd"),
-                          max(r["date"] for r in rs)))
-        stats.sort(key=lambda x: (-(x[2] or 0), x[7] if x[7] is not None else 1e9))
+                          med(rs, "traps_ok"), med(rs, "sec_per_1k_chars"), med(rs, "tokens_per_1k_chars"),
+                          med(rs, "cost_per_1m_chars_usd"), max(r["date"] for r in rs)))
+        stats.sort(key=lambda x: (-(x[2] or 0), x[8] if x[8] is not None else 1e9, x[7] or 1e9))
 
         def f(v, fmt):
             return "—" if v is None else fmt.format(v)
 
-        for m, runs, sc, fp, fo, sp, tk, cost, last in stats:
+        for m, runs, sc, fp, fo, tp, sp, tk, cost, last in stats:
             lines.append(f"| `{m}` | {runs} | {f(sc, '{:.1f}')} | {f(fp, '{:.0f}%')} | {f(fo, '{:.0f}%')} | "
-                         f"{f(sp, '{:.1f}')} | {f(tk, '{:.0f}')} | {f(cost, '${:.2f}')} | {last} |")
+                         f"{f(tp, '{:.0f}%')} | {f(sp, '{:.1f}')} | {f(tk, '{:.0f}')} | {f(cost, '${:.2f}')} | {last} |")
         lines.append("")
         if wasteful:
             lines += [f"Did not fit the token budget ({BUDGET:,} per run) / Не уложились в лимит токенов: "

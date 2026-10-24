@@ -50,7 +50,7 @@ chaquopy {
         version = "3.12"
         pip {
             install("polytome")                              // с PyPI, после публикации
-            // install("../polytome/dist/polytome-0.6.2-py3-none-any.whl")  // или локальная сборка: python -m build
+            // install("../polytome/dist/polytome-0.7.0-py3-none-any.whl")  // или локальная сборка: python -m build
         }
     }
 }
@@ -119,7 +119,7 @@ const rpc = (method, params = {}) => new Promise((ok) => {
 
 | метод | параметры | результат |
 |---|---|---|
-| `version` | — | `{"polytome": "0.6.2", "api": 1}` |
+| `version` | — | `{"polytome": "0.7.0", "api": 1}` |
 | `check` | `ping=false` | готовность: модель и ключ для каждой роли; `ping` — короткий запрос к моделям |
 | `providers` | — | каталог провайдеров: `id, title, local, needs_key, has_key, keys_url, suggest` |
 | `profiles` | — | `quality / balanced / economy / local` с описанием |
@@ -143,7 +143,7 @@ const rpc = (method, params = {}) => new Promise((ok) => {
 | `suggest_fix` | `book, n, paragraph, instruction?, mode=fix` | новый перевод одного абзаца, **без сохранения**: `fix` — поправить текущий по указанию, `retranslate` — перевести заново → `{source, old, new}` |
 | `set_paragraph` | `book, n, paragraph, text` | сохранить перевод абзаца (прежний текст остаётся в истории главы) |
 | `bench_info` | — | набор для замеров моделей: версия, пары языков, размер и грубая оценка токенов на пару |
-| `bench` | `model?, pair=zh-ru, save_dir?, budget=100000` | прогнать модель на общих тестовых текстах и оценить проверками кода → запись результата (без ключей и адресов серверов; см. [bench/README.md](../bench/README.md)); прогресс — `bench_progress`, итог — `bench_done` |
+| `bench` | `model?, pair=zh-ru, save_dir?, budget=100000` | прогнать модель на общих тестовых текстах (7 исходных языков → ru/en, ловушки со смыслом) и оценить кодом → запись результата (без ключей и адресов серверов; см. [bench/README.md](../bench/README.md)); прогресс — `bench_progress`, итог — `bench_done` |
 | `bench_cancel` | — | остановить идущий замер |
 | `export` | `book, fmt="epub"\|"fb2"\|"txt"\|"all", out?, chapters?` | `{"path", "chapters", "missing_total", ...}` |
 

@@ -1,0 +1,54 @@
+{
+ "schema": 1,
+ "suite": "2-f65479b1",
+ "polytome": "0.7.0",
+ "date": "2026-10-24",
+ "model": "ollama-cloud:nemotron-3-ultra",
+ "provider": "ollama-cloud",
+ "pair": "ko-en",
+ "segments": 18,
+ "source_chars": 860,
+ "first_pass_ok": 100.0,
+ "final_ok": 100.0,
+ "traps_ok": 100.0,
+ "traps_failed": [],
+ "score": 100.0,
+ "missing_after_draft": 0,
+ "issues_first": {},
+ "issues_final": {},
+ "calls": 2,
+ "seconds": 50.5,
+ "sec_per_1k_chars": 58.7,
+ "tokens": {
+  "prompt": 2164,
+  "completion": 2281
+ },
+ "tokens_per_1k_chars": 5169,
+ "price_per_1m_tokens": null,
+ "cost_usd": null,
+ "cost_per_1m_chars_usd": null,
+ "translation": {
+  "1": [
+   "Chapter 1: A Guest on a Rainy Night",
+   "Rain had been falling on Doldari Village for three days straight. Kim Haneul's older sister had left for Seoul in the spring, and since then, the village's small apothecary had been run by Haneul alone.",
+   "When night fell, she closed the shutters, counted the day's earnings, extinguished the oil lamp, and went upstairs.",
+   "She had just lain down when an urgent knocking came from downstairs, followed by a man's voice. \"Is anyone there?\"",
+   "A soaked young man stood at the door. Blood seeped through the cloth wrapped around his left arm. He introduced himself as Park Junho and said he was from the Azure Dragon Society.",
+   "\"Please treat my wound,\" Park Junho said in a low voice. \"I'll pay. Will 3,500 nyang be enough?\"",
+   "He pulled out a letter wrapped in oilpaper from his bosom. \"This letter must be delivered to Cheongpungsa by May 18th.\"",
+   "Haneul thought to herself. The neighbors had been jealous that the apothecary was doing well, and now a strange man showed up in the middle of the night.",
+   "Still, Haneul didn't take the money and only said, \"I'll guide you to the mountain early tomorrow morning.\""
+  ],
+  "2": [
+   "Chapter 2: The Mountain Path",
+   "As soon as dawn broke, the two set out. Haneul carried a basket on her back, inside which were rice balls, medicinal herbs, and a worn umbrella.",
+   "Halfway up the mountain, they met Lee Youngsoo, an old man splitting firewood. The old man set down his axe and lowered his voice. He said that yesterday evening, three strangers had been looking for an injured young man at the village entrance.",
+   "\"Haneul, take the side path,\" Lee Youngsoo said. \"The main road is dangerous.\" Haneul thanked the old man.",
+   "The side path was narrow and slippery. Haneul led the way, stepping firmly with each step. Park Junho followed silently behind.",
+   "By noon, the rain stopped and the mountain mist slowly lifted, revealing the roof of Cheongpungsa in the distance. A Buddhist nun stood at the temple gate. It was Jeonghye Sunim, who handled guest reception at the temple.",
+   "Jeonghye Sunim accepted the letter, checked the red seal on the envelope, and nodded. \"The abbot has been waiting for this letter for two years.\"",
+   "Park Junho said to Haneul, \"You're my lifesaver.\" Haneul smiled and replied, \"Then next time you come, fix the pharmacy roof.\" Park Junho stayed at the temple.",
+   "Toward evening, Haneul descended the mountain alone. When she arrived home, it was already dark. She lit the oil lamp and sat behind the counter for a long while."
+  ]
+ }
+}

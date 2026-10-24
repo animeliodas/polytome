@@ -277,7 +277,7 @@ def test_bench():
     tmp = Path(tempfile.mkdtemp())
     h = Polytome(CONFIG, home=tmp / "home")
     info = h.bench_info()
-    assert info["suite"].startswith("1-") and [p["pair"] for p in info["pairs"]] == ["zh-ru", "zh-en", "en-ru"], info
+    assert info["suite"].startswith("2-") and [p["pair"] for p in info["pairs"]][:3] == ["zh-ru", "ja-ru", "ko-ru"], info
     from polytome.llm import LLMClient
     llm = LLMClient(2)
     llm.http = httpx.Client(transport=httpx.MockTransport(good))
@@ -368,6 +368,102 @@ def test_bench():
     assert chapter_level_issues([{"id": i, "src": "黎小白笑了。他走了。" * 3, "tr": ""} for i in range(10)]) == {}
     out = json.loads(h.call("bench", {"model": "no-colon"}))
     assert not out["ok"], out
+
+
+def test_bench_traps():
+    """Ловушки со смыслом: правильный перевод проходит все, типичные ошибки ловятся."""
+    from polytome import bench, bench_suite
+    assert len(bench_suite.PAIRS) == 13 and all(len(bench_suite.traps(*p.split("-"))) == 8 for p in bench_suite.PAIRS
+                                                if not p.startswith("en-"))
+    good_ru = {
+        "1": ["Глава 1. Гость в дождливую ночь",
+              "В Цинши дождь шёл уже три дня. Старшая сестра Линь Сяоюй весной уехала в столицу, и с тех пор аптекой она занималась одна.",
+              "Когда стемнело, закрыла окна и двери, пересчитала дневную выручку, задула лампу и поднялась наверх.",
+              "Едва она легла, внизу постучали, и мужской голос спросил: — Есть кто-нибудь?",
+              "За дверью стоял промокший молодой человек. Он назвался Бай Юнем и сказал, что состоит в Обществе Лазурного Дракона.",
+              "— Мне нужно перевязать рану, — тихо сказал Бай Юнь. — Я заплачу. 3500 монет хватит?",
+              "Он достал письмо в промасленной бумаге: — Его нужно доставить в монастырь Цинфэн до 18 мая.",
+              "Пока она перевязывала рану, он усмехнулся: — Узнай моя невеста, что я ночью стучался к девушке, она бы меня приревновала.",
+              "Линь Сяоюй не взяла денег, только сказала: — Завтра утром отведу тебя в горы."],
+        "2": ["Глава 2. Горная тропа", "", "", "", "", "", "", "",
+              "Под вечер Линь Сяоюй одна спустилась с горы. Дома уже стемнело; она зажгла лампу и долго сидела за прилавком."],
+    }
+    r = bench.check_traps(good_ru, "zh", "ru")
+    assert r["ok"] == r["total"] == 8, r
+    bad = json.loads(json.dumps(good_ru))
+    bad["1"][2] = bad["1"][2].replace("закрыла", "закрыл").replace("поднялась", "поднялся")
+    bad["1"][4] = bad["1"][4].replace("Бай Юнем", "Белым Облаком")
+    bad["1"][5] = bad["1"][5].replace("3500", "три тысячи пятьсот")
+    bad["1"][6] = bad["1"][6].replace("18 мая", "15 мая")
+    bad["1"][1] = bad["1"][1].replace("Старшая сестра Линь Сяоюй весной", "Сестра Линь Сяоюй, Чуньтянь,")
+    bad["1"][7] = "Он усмехнулся: — Моя невеста, узнав об этом, наелась бы уксуса."
+    r = bench.check_traps(bad, "zh", "ru")
+    assert {f["id"] for f in r["failed"]} == {"spring_and_sister", "dropped_subject_1", "name_is_word", "number_words",
+                                               "date_words", "idiom"}, r
+    # прописью и в несовершенном виде — не ошибки: «восемнадцатого мая», «закрывала… поднималась»
+    ok2 = json.loads(json.dumps(good_ru))
+    ok2["1"][6] = ok2["1"][6].replace("18 мая", "восемнадцатого мая")
+    ok2["1"][2] = "Когда стемнело, она закрывала ставни, подсчитывала выручку, гасила лампу и поднималась наверх."
+    assert bench.check_traps(ok2, "zh", "ru")["ok"] == 8
+
+    good_en = {
+        "1": ["Chapter 1", "It had been raining in Qingshi for three days. In spring Lin Xiaoyu's sister left for the capital.",
+              "After dark she shut the doors, counted the takings, blew out the lamp and went upstairs.", "",
+              "He said his name was Bai Yun and that he belonged to the Azure Dragon Society.",
+              "\"I can pay. Will three thousand five hundred coins do?\"",
+              "\"This letter must reach Qingfeng Temple before the eighteenth of May.\"",
+              "\"If my fiancée knew, she would be jealous.\"", ""],
+        "2": ["Chapter 2", "", "", "", "", "", "", "",
+              "In the evening Lin Xiaoyu walked down alone; at home she lit the lamp and sat behind the counter."],
+    }
+    assert bench.check_traps(good_en, "zh", "en")["ok"] == 8
+    bad_en = json.loads(json.dumps(good_en))
+    bad_en["1"][2] = "After dark he shut the doors and went upstairs."
+    bad_en["1"][4] = "He said his name was White Cloud, of the Azure Dragon Society."
+    assert {f["id"] for f in bench.check_traps(bad_en, "zh", "en")["failed"]} == {"dropped_subject_1", "name_is_word"}
+    # «Wolf» с большой буквы — имя, а «wolf» — ошибка; «кот» внутри «который» — не кошка
+    de_en = {"1": [""] * 9, "2": [""] * 9}
+    de_en["1"][7] = "Anna must have been blind: only now did she notice how pale he was. Konrad Wolf smiled."
+    assert not any(f["id"] in ("name_is_word", "idiom") for f in bench.check_traps(de_en, "de", "en")["failed"])
+    de_en["1"][7] += " He looked like a hungry wolf."
+    assert "name_is_word" in {f["id"] for f in bench.check_traps(de_en, "de", "en")["failed"]}
+    ja_ru = {"1": [""] * 9, "2": [""] * 9}
+    ja_ru["1"][7] = "Харука вздохнула: сейчас сезон закупки трав, рук совсем не хватало."
+    assert "idiom" not in {f["id"] for f in bench.check_traps(ja_ru, "ja", "ru")["failed"]}
+    # остатки оригинала на латинице: французские служебные слова в английском переводе, латиница в русском
+    assert bench._latin_leftover("fr", "latin", "She closed the volets, et elle compta la recette de la journée.")
+    assert not bench._latin_leftover("fr", "latin", "She closed the shutters and counted the day's takings.")
+    assert bench._latin_leftover("de", "cyrillic", "Она закрыла die Fensterläden und zählte die Einnahmen des Tages.")
+
+
+def test_truncated_answer_retried():
+    """Ответ упёрся в лимит (finish_reason=length): обрезанный последний абзац не принимается, а переводится заново."""
+    import re
+    import httpx
+    from polytome.workspace import Workspace
+    tmp = Path(tempfile.mkdtemp())
+    h = Polytome(CONFIG, home=tmp / "home")
+    book = h.import_book(_novel(tmp))["path"]
+    calls = []
+
+    def reply(req):
+        user = json.loads(req.content)["messages"][-1]["content"]
+        ids = [int(m.group(1)) for m in re.finditer(r"^\[(\d+)\] ", user, re.M)]
+        calls.append(ids)
+        if len(calls) == 1:  # первый ответ: все абзацы, но последний обрезан на полуслове
+            body = "\n".join(f"[{i}] Полный перевод абзаца {i}." for i in ids[:-1]) + f"\n[{ids[-1]}] Обрезанный пере"
+            return httpx.Response(200, json={"choices": [{"message": {"content": body}, "finish_reason": "length"}],
+                                             "usage": {}})
+        body = "\n".join(f"[{i}] Полный перевод абзаца {i}." for i in ids)
+        return httpx.Response(200, json={"choices": [{"message": {"content": body}, "finish_reason": "stop"}], "usage": {}})
+
+    h.llm.http = httpx.Client(transport=httpx.MockTransport(reply))
+    from polytome.engine import Engine
+    eng = Engine(Workspace(book), h.cfg, h.llm)
+    segs = [{"id": i + 1, "src": p, "tr": None} for i, p in enumerate(Workspace(book).source_paragraphs(1))]
+    eng._fill(1, segs, [], [], [])
+    assert all(s["tr"] and s["tr"].startswith("Полный") for s in segs), segs
+    assert len(calls) == 2 and calls[1] == [segs[-1]["id"]], calls
 
 
 if __name__ == "__main__":

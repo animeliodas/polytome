@@ -211,7 +211,8 @@ class Engine:
 
     # ---------- перевод батча ----------
     def _translate_batch(self, n: int, batch: list[dict], seam: list[dict], look: list[dict],
-                         entries: list[dict], instruction: str = "", model: ModelRef | None = None) -> dict[int, str]:
+                         entries: list[dict], instruction: str = "", model: ModelRef | None = None,
+                         budget_mult: int = 1) -> dict[int, str]:
         model = model or self._translator()
         user = []
         if seam:
@@ -226,11 +227,23 @@ class Engine:
         msgs = [{"role": "system", "content": self._system_prompt(entries, "\n".join(s["src"] for s in batch))},
                 {"role": "user", "content": "\n\n".join(user)}]
         # Лимит вывода: без него модель в редких случаях зацикливается до предела контекста.
-        budget = 3000 + 6 * sum(self._size(s["src"]) for s in batch)
+        budget = (3000 + 6 * sum(self._size(s["src"]) for s in batch)) * budget_mult
         res = self.llm.chat(model, msgs, temperature=self.temperature, max_tokens=budget, role="translator")
         got = parse_numbered(res.content, [s["id"] for s in batch])
+        if res.finish_reason == "length" and got:
+            # Ответ упёрся в лимит: последний абзац, который модель писала, обрезан на полуслове — не принимать его,
+            # переспросить (рассуждающие модели тратят часть лимита на «мысли», и обрезка случается на любом месте).
+            order = [int(m.group(1)) for m in re.finditer(r"^\s*\[(\d+)\]", strip_think(res.content), re.M)
+                     if int(m.group(1)) in got]
+            got.pop(order[-1] if order else max(got), None)
+        if res.finish_reason == "length" and len(batch) == 1 and not got and budget_mult < 4:
+            return self._translate_batch(n, batch, seam, look, entries, instruction, model, budget_mult * 2)
         if res.finish_reason == "length" and len(batch) > 1 and len(got) < len(batch):
-            mid = len(batch) // 2
+            missing = [s for s in batch if s["id"] not in got]
+            if got:  # часть получена — допросить только недостающие (их меньше, рекурсия конечна)
+                got.update(self._translate_batch(n, missing, seam, look, entries, instruction, model))
+                return got
+            mid = len(batch) // 2  # не получено ничего — делить пополам
             got.update(self._translate_batch(n, batch[:mid], seam, batch[mid:mid + 2], entries, instruction, model))
             rest = [s for s in batch[mid:] if s["id"] not in got]
             if rest:

@@ -1,0 +1,54 @@
+{
+ "schema": 1,
+ "suite": "2-f65479b1",
+ "polytome": "0.7.0",
+ "date": "2026-10-24",
+ "model": "ollama-cloud:kimi-k2.7-code",
+ "provider": "ollama-cloud",
+ "pair": "fr-en",
+ "segments": 18,
+ "source_chars": 1986,
+ "first_pass_ok": 100.0,
+ "final_ok": 100.0,
+ "traps_ok": 100.0,
+ "traps_failed": [],
+ "score": 100.0,
+ "missing_after_draft": 0,
+ "issues_first": {},
+ "issues_final": {},
+ "calls": 2,
+ "seconds": 15.9,
+ "sec_per_1k_chars": 8.0,
+ "tokens": {
+  "prompt": 2376,
+  "completion": 2008
+ },
+ "tokens_per_1k_chars": 2207,
+ "price_per_1m_tokens": null,
+ "cost_usd": null,
+ "cost_per_1m_chars_usd": null,
+ "translation": {
+  "1": [
+   "Chapter 1: A Visitor in the Rain",
+   "It had been raining on Pierrefeu for three days. That spring, Claire Martin's older sister had left for Paris, and since then Claire had been running the little village pharmacy alone.",
+   "At nightfall, she closed the shutters, counted the day's takings, blew out the lamp, and went upstairs.",
+   "She had barely lain down when someone knocked violently at the door downstairs. A man's voice called out, \"Is anyone there?\"",
+   "On the doorstep stood a young man soaked to the bone, his left arm bound in a cloth stained with blood. He introduced himself: his name was Pierre Lapin, and he belonged to the Azure Dragon Society.",
+   "\"I need tending,\" Lapin said in a low voice. \"I can pay. Three thousand five hundred francs—will that be enough?\"",
+   "He took from his jacket a letter wrapped in oiled paper. \"This letter must reach Saint-Vent Abbey before the eighteenth of May.\"",
+   "Since her sister's departure, Claire had often felt low in the evenings, but that night she had no time to think of it.",
+   "Yet she refused his money and simply said, \"At dawn tomorrow, I will take you into the mountains.\""
+  ],
+  "2": [
+   "Chapter 2: The Mountain Path",
+   "At daybreak they set out. Claire carried on her back a basket containing bread, medicinal herbs and an old umbrella.",
+   "Halfway up the slope, they met old Gaston Roux, who was splitting wood. He set down his axe and told them in a low voice that the previous evening three strangers had questioned the people at the entrance to the village about a wounded young man.",
+   "\"Take the path, my little Claire,\" Gaston Roux said. \"The main road isn't safe.\" Claire thanked him.",
+   "The path was narrow and slippery. Claire walked ahead, placing each step with assurance. Lapin followed without a word.",
+   "At noon, the rain stopped; the mist slowly cleared and the roof of the Saint-Vent abbey appeared in the distance. In front of the door stood a nun, Sister Agnès, charged with welcoming visitors.",
+   "Sister Agnès took the letter, examined the red seal and nodded. \"The abbess has been waiting for this letter for 2 years.\"",
+   "Lapin said to Claire: \"I owe you my life.\" Claire smiled: \"Then next time, repair the roof of my pharmacy.\" Lapin stayed at the abbey.",
+   "That evening, Claire went back down the mountain alone. When she reached home, it was already night; she lit the lamp and sat for a long time behind the counter."
+  ]
+ }
+}
