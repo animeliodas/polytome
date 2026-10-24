@@ -91,7 +91,7 @@ polytome setup --provider openrouter --key sk-... --strong <модель> --fast
 tool-calling тоже работает — агент переключается на текстовый протокол сам.
 
 Какую модель выбрать: `polytome bench` оценивает модели на одинаковых тестовых текстах проверками кода (никакая
-модель не судит другую), со скоростью и ценой; результаты всех собираются в [bench/LEADERBOARD.md](bench/LEADERBOARD.md) —
+модель не судит другую), со скоростью и ценой; результаты всех собираются [на сайте](https://animeliodas.github.io/polytome/) и в [bench/LEADERBOARD.md](bench/LEADERBOARD.md) —
 добавьте свой, см. [bench/README.md](bench/README.md).
 
 ## Надёжность

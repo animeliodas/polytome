@@ -40,6 +40,7 @@ SCHEMA = 1
 # книг слишком расточительна (маленькие «рассуждающие» модели теряют абзацы, и переспросы с длинными рассуждениями
 # съедали сотни тысяч токенов). Лимит проверяется перед каждым запросом: перерасход — не больше одного запроса.
 BUDGET = 100_000
+SITE = "https://animeliodas.github.io/polytome/"  # сайт таблицы (bench/site, GitHub Pages)
 
 
 class BudgetExceeded(LLMError):
@@ -312,6 +313,9 @@ def leaderboard(results: list[dict], suite_version: str | None = None) -> str:
     over = [r for r in results if r.get("suite") == sv and r.get("error") == "budget"]
     rows = [r for r in results if r.get("suite") == sv and not r.get("error")]
     lines = ["# Polytome model leaderboard / Таблица моделей", "",
+             f"**Interactive version / Интерактивная версия: [{SITE}]({SITE})** — all pairs at a glance, every "
+             "translation next to the original with its traps / все пары разом, каждый перевод рядом с оригиналом "
+             "и ловушками.", "",
              f"Suite / набор: `{sv}`. Score = average of three shares (0–100): paragraphs clean right after "
              "translation, clean after the code-guided repair, and meaning traps passed (idioms, names that are "
              "ordinary words, dropped subjects, numbers and dates in words — the right answer is known in advance). "

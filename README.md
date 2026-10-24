@@ -91,7 +91,7 @@ Keys are stored in `secrets.json` (or environment variables), not in `polytome.j
 tool-calling works too — the agent switches to a text protocol by itself.
 
 Which model to choose: `polytome bench` scores models on the same test texts with the code checks (no model judges
-another), with speed and price; everyone's results are collected in [bench/LEADERBOARD.md](bench/LEADERBOARD.md) —
+another), with speed and price; everyone's results are collected [on the site](https://animeliodas.github.io/polytome/) and in [bench/LEADERBOARD.md](bench/LEADERBOARD.md) —
 add yours, see [bench/README.md](bench/README.md).
 
 ## Reliability

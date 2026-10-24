@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Polytome — model leaderboard</title>
+  <meta name="description" content="Which LLM translates books well: the same story in 7 languages, scored by code checks and meaning traps.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1 id="title">Polytome</h1>
+      <p class="sub" id="meta"></p>
+    </div>
+    <nav class="links">
+      <button id="lang-btn" class="chip" type="button"></button>
+      <a id="howto" class="chip" href="https://github.com/animeliodas/polytome/tree/main/bench"></a>
+      <a class="chip" href="https://github.com/animeliodas/polytome">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="intro" id="intro"></section>
+
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-map-btn" data-tab="map" type="button"></button>
+      <button role="tab" id="tab-pair-btn" data-tab="pair" type="button"></button>
+    </div>
+
+    <section id="tab-map" role="tabpanel"></section>
+    <section id="tab-pair" role="tabpanel" hidden></section>
+    <p class="loading" id="loading">…</p>
+  </main>
+
+  <dialog id="run" aria-labelledby="run-title"></dialog>
+
+  <footer>
+    <p id="foot"></p>
+  </footer>
+  <script src="app.js"></script>
+</body>
+</html>

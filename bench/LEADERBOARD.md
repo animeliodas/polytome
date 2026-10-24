@@ -1,5 +1,7 @@
 # Polytome model leaderboard / Таблица моделей
 
+**Interactive version / Интерактивная версия: [https://animeliodas.github.io/polytome/](https://animeliodas.github.io/polytome/)** — all pairs at a glance, every translation next to the original with its traps / все пары разом, каждый перевод рядом с оригиналом и ловушками.
+
 Suite / набор: `2-f65479b1`. Score = average of three shares (0–100): paragraphs clean right after translation, clean after the code-guided repair, and meaning traps passed (idioms, names that are ordinary words, dropped subjects, numbers and dates in words — the right answer is known in advance). All checks are code, no model judges another. Median over runs. Add your run: see [README.md](README.md).
 
 Score — среднее трёх долей (0–100): абзацы без серьёзных замечаний сразу после перевода, после починки и пройденные ловушки со смыслом (идиомы, имена-слова, опущенное подлежащее, числа и даты прописью — правильный ответ известен заранее). Всё проверяет код, модели друг друга не судят. Медиана по прогонам.

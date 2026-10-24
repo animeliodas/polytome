@@ -28,7 +28,9 @@ The traps check meaning, not wording: "the eighteenth of May" is as right as "Ma
 "закрыла" in Russian, and an idiom may keep its image as long as the meaning is there. Plus speed, tokens and price
 (if the provider reports prices) per 1000 characters of the original.
 
-The table of all submitted results: **[LEADERBOARD.md](LEADERBOARD.md)**. The first, simpler suite (short texts
+The table of all submitted results: **[the site](https://animeliodas.github.io/polytome/)** — all pairs at a
+glance, every translation next to the original with its traps — and the same in Markdown,
+[LEADERBOARD.md](LEADERBOARD.md). The site is rebuilt by GitHub Actions on every new result (`bench/site/`). The first, simpler suite (short texts
 without traps, where strong models all reached 100) is kept in [archive/](archive/).
 
 **Limits.** Style is not measured, and 8 traps per pair catch typical mistakes of mid-level models but do not
@@ -87,7 +89,9 @@ translation of the test texts. Results of another suite version (`suite`) are no
 «закрывала» — как «закрыла», а идиома может сохранить образ, если смысл передан. Плюс скорость, токены и цена (если
 провайдер сообщает цены) на 1000 знаков оригинала.
 
-Таблица всех присланных результатов: **[LEADERBOARD.md](LEADERBOARD.md)**. Первый, более простой набор (короткие
+Таблица всех присланных результатов: **[сайт](https://animeliodas.github.io/polytome/)** — все пары разом,
+каждый перевод рядом с оригиналом и ловушками, — и то же в Markdown, [LEADERBOARD.md](LEADERBOARD.md). Сайт
+пересобирается GitHub Actions при каждом новом результате (`bench/site/`). Первый, более простой набор (короткие
 тексты без ловушек — сильные модели все получали 100) сохранён в [archive/](archive/).
 
 **Ограничения.** Стиль не оценивается, а 8 ловушек на пару ловят типичные ошибки моделей среднего уровня, но не

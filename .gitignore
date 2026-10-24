@@ -21,3 +21,6 @@ eval/COMPARE.md
 # рабочие папки замеров моделей (polytome bench)
 .bench/
 .bench-runs/
+
+# сайт таблицы моделей (bench/site/build.py)
+_site/
