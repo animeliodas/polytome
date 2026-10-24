@@ -327,5 +327,6 @@
  "таблица: {0} ({1} результатов)": "table: {0} ({1} results)",
  "лимит {0} токенов на прогон исчерпан": "the budget of {0} tokens per run is used up",
  "  [yellow]не уложилась в лимит {0:,} токенов[/yellow] — для перевода книг слишком расточительна": "  [yellow]did not fit the budget of {0:,} tokens[/yellow] — too wasteful for translating books",
- "лимит токенов на прогон (0 — без лимита)": "token budget per run (0 — no limit)"
+ "лимит токенов на прогон (0 — без лимита)": "token budget per run (0 — no limit)",
+ "модель не дала ни одного ответа — возможно, это не чат-модель": "the model gave no answer at all — it may not be a chat model"
 }

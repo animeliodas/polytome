@@ -152,6 +152,9 @@ def run(cfg: Config, model: str, pair: str, home: Path, on_event=None, cancel: t
     finally:
         if over_budget.is_set() or (budget and llm.usage.total() > budget):  # и если перевалила последним запросом
             error = "budget"
+        elif not error and not any(r["calls"] for r in llm.usage.by_role.values()):
+            # провайдер отверг все запросы (например, это не чат-модель): не «0 баллов», а «не ответила»
+            error = _("модель не дала ни одного ответа — возможно, это не чат-модель")
         if budget:
             llm.chat = plain_chat
         if not keep:

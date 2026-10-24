@@ -688,8 +688,8 @@ def chapter_level_issues(segs: list[dict]) -> dict[int, list[dict]]:
             seen[key] = s["id"]
     lens = [(max(han_count(s["src"]), len(s["src"]) // 2), len(s.get("tr") or "")) for s in segs]
     ratios = [t / h for h, t in lens if h >= 10]
-    if len(ratios) >= 8:
-        g = statistics.median(ratios)
+    g = statistics.median(ratios) if len(ratios) >= 8 else 0
+    if g > 0:  # большинство абзацев без перевода — сравнивать длины не с чем (и делить на 0 нельзя)
         bad = [abs(math.log((t + 12) / ((h + 4) * g))) > math.log(2.0) for h, t in lens]
         for k, s in enumerate(segs):
             if bad[k] and sum(bad[max(0, k - 1):k + 2]) >= 2:

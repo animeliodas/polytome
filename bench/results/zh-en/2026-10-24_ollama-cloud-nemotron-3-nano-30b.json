@@ -1,0 +1,43 @@
+{
+ "schema": 1,
+ "suite": "1-f97c7303",
+ "polytome": "0.6.1",
+ "date": "2026-10-24",
+ "model": "ollama-cloud:nemotron-3-nano:30b",
+ "provider": "ollama-cloud",
+ "pair": "zh-en",
+ "segments": 9,
+ "source_chars": 806,
+ "first_pass_ok": 100.0,
+ "final_ok": 100.0,
+ "score": 100.0,
+ "missing_after_draft": 9,
+ "issues_first": {},
+ "issues_final": {},
+ "calls": 18,
+ "seconds": 314.3,
+ "sec_per_1k_chars": 390.0,
+ "tokens": {
+  "prompt": 18570,
+  "completion": 99004
+ },
+ "tokens_per_1k_chars": 145873,
+ "price_per_1m_tokens": null,
+ "cost_usd": null,
+ "cost_per_1m_chars_usd": null,
+ "translation": {
+  "1": [
+   "Chapter 1: Rainy Night Visitor",
+   "Rain had fallen in Qingshi for three whole days. Lin Xiaoyu closed the pharmacy door and lit the last lamp. She was twenty-two, and after her father's death, she had single-handedly run this small pharmacy.",
+   "\"Is anyone there?\" a man's voice called from outside.",
+   "Lin Xiaoyu hesitated, but opened the door. A young man stood at the door, soaking wet, his left hand pressed against his right arm, blood seeping between his fingers. He said his name was Chen Ziming, and he had come from the provincial capital.",
+   "\"I need to dress the wound,\" Chen Ziming said quietly, \"I can pay, is one hundred and twenty yuan enough?\"",
+   "She didn't take his money, just had him sit beside the counter, then turned to get gauze and medicinal wine. The wound wasn't deep, but it was long, as if cut by a knife. She washed the wound while asking how he got injured.",
+   "Chen Ziming fell silent for a long time, then said, \"On the road, I met some people who wanted the letter on my person.\" He took out an oil-paper package from his pocket and placed it on the table. \"This letter must be delivered to Baiyun by May 18.\"",
+   "Lin Xiaoyu cast a glance out the window. Baiyun Temple was on the mountain, forty li from Qingshi Town, and mountain roads were hardest in the rain. She recalled her father's words: \"Save people to the end.\"",
+   "\"Tomorrow morning I'll take you up the mountain,\" she said, \"You can sleep in the back room tonight.\""
+  ]
+ },
+ "error": "budget",
+ "budget": 100000
+}

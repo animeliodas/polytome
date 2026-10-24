@@ -354,6 +354,18 @@ def test_bench():
     for t in ths:
         t.join()
     assert len(outs) == 3 and all("error" not in o for o in outs), [o.get("error") for o in outs]
+    # провайдер отвергает все запросы (не чат-модель): понятная ошибка, а не падение на делении на ноль
+    def refuse(req):
+        if req.url.path.endswith("/models"):
+            return httpx.Response(200, json={"data": []})
+        return httpx.Response(400, json={"error": "this model does not support chat"})
+
+    llm5 = LLMClient(2)
+    llm5.http = httpx.Client(transport=httpx.MockTransport(refuse))
+    nochat = bench.run(h.cfg, "openrouter:not-chat", "zh-ru", tmp / "home", llm=llm5)
+    assert nochat.get("error") and "budget" not in nochat["error"] and nochat["error"] != "cancelled", nochat
+    from polytome.checks import chapter_level_issues
+    assert chapter_level_issues([{"id": i, "src": "黎小白笑了。他走了。" * 3, "tr": ""} for i in range(10)]) == {}
     out = json.loads(h.call("bench", {"model": "no-colon"}))
     assert not out["ok"], out
 

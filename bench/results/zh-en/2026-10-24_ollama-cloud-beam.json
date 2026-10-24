@@ -1,0 +1,52 @@
+{
+ "schema": 1,
+ "suite": "1-f97c7303",
+ "polytome": "0.6.1",
+ "date": "2026-10-24",
+ "model": "ollama-cloud:beam",
+ "provider": "ollama-cloud",
+ "pair": "zh-en",
+ "segments": 18,
+ "source_chars": 806,
+ "first_pass_ok": 100.0,
+ "final_ok": 100.0,
+ "score": 100.0,
+ "missing_after_draft": 0,
+ "issues_first": {},
+ "issues_final": {},
+ "calls": 2,
+ "seconds": 11.2,
+ "sec_per_1k_chars": 13.9,
+ "tokens": {
+  "prompt": 2379,
+  "completion": 3147
+ },
+ "tokens_per_1k_chars": 6856,
+ "price_per_1m_tokens": null,
+ "cost_usd": null,
+ "cost_per_1m_chars_usd": null,
+ "translation": {
+  "1": [
+   "Chapter 1: A Guest on a Rainy Night",
+   "The rain in Qingshi had fallen for three whole days. Lin Xiaoyu shut the door of the pharmacy and lit the last lamp. She was twenty-two, and since her father's death she had kept this small pharmacy running alone.",
+   "\"Is anyone there?\" a man's voice called from outside.",
+   "Lin Xiaoyu hesitated, then opened the door. A young man stood there, soaked to the skin, his left hand pressed over his right arm, blood seeping through his fingers. He said his name was Chen Ziming and that he had come from the provincial capital.",
+   "\"I need this bandaged,\" Chen Ziming said quietly. \"I can pay—is a hundred and twenty yuan enough?\"",
+   "She didn't take his money. She just had him sit beside the counter and turned to fetch gauze and medicinal wine. The wound wasn't deep, but it was long, as if slashed by a knife. As she cleaned it, she asked how he had been hurt.",
+   "Chen Ziming was silent for a long time before he said, \"On the road I ran into several men. They wanted a letter I was carrying.\" He took an oil-paper packet from inside his coat and set it on the table. \"This letter has to reach Baiyun before May 18.\"",
+   "Lin Xiaoyu glanced out the window. Baiyun was up in the mountains, forty li from Qingshi, and the mountain road was hardest to travel in the rain. She remembered what her father often said: if you save someone, see it through.",
+   "\"I'll take you up the mountain first thing tomorrow morning,\" she said. \"Tonight you can sleep in the back room.\""
+  ],
+  "2": [
+   "Chapter 2: Mountain Road",
+   "Before dawn, Lin Xiaoyu woke Chen Ziming. She shouldered a bamboo basket containing dried food, medicinal herbs, and an old umbrella. Chen Ziming's arm had improved somewhat, but his face was still pale.",
+   "When they reached halfway up the mountain, they met an old woodcutter, Zhou Dashan. Zhou Dashan knew Lin Xiaoyu and smiled as he asked where she was going so early.",
+   "\"I'm going to Baiyun to deliver medicine,\" Lin Xiaoyu answered. She didn't mention the letter.",
+   "Zhou Dashan glanced at Chen Ziming and lowered his voice. \"Yesterday evening, three outsiders were asking about an injured young man at the town entrance. Be careful.\"",
+   "Chen Ziming's face went even paler. Lin Xiaoyu thanked the old man and led Chen Ziming off the main road onto a narrow path known only to herb gatherers. The path was narrow and slippery; she walked ahead, each step sure and steady.",
+   "By noon, the rain finally stopped. The mountain mist slowly cleared, and in the distance the roof of Baiyun appeared. A nun stood at the gate; her name was Zhao Qiuyue, and she was the temple's guest master.",
+   "Zhao Qiuyue took the oil-paper packet, looked at the red seal on its mouth, and nodded. \"The master has been waiting for this letter for 2 years,\" she said. \"Thank you for your trouble.\"",
+   "On the way back, Chen Ziming said to Lin Xiaoyu, \"I owe you my life.\" Lin Xiaoyu smiled and said, \"Then when you come to Qingshi next time, help me repair the roof of my medicine shop.\""
+  ]
+ }
+}

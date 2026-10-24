@@ -51,7 +51,7 @@ chaquopy {
         version = "3.12"
         pip {
             install("polytome")                              // from PyPI, once published
-            // install("../polytome/dist/polytome-0.6.1-py3-none-any.whl")  // or a local build: python -m build
+            // install("../polytome/dist/polytome-0.6.2-py3-none-any.whl")  // or a local build: python -m build
         }
     }
 }
@@ -119,7 +119,7 @@ const rpc = (method, params = {}) => new Promise((ok) => {
 
 | method | parameters | result |
 |---|---|---|
-| `version` | — | `{"polytome": "0.6.1", "api": 1}` |
+| `version` | — | `{"polytome": "0.6.2", "api": 1}` |
 | `check` | `ping=false` | readiness: a model and a key for every role; `ping` — a short request to the models |
 | `providers` | — | provider catalog: `id, title, local, needs_key, has_key, keys_url, suggest` |
 | `profiles` | — | `quality / balanced / economy / local` with descriptions |
