@@ -284,12 +284,31 @@ async function openRun(file, cmpFile) {
   dlg.innerHTML = h;
   $("dlg-close").addEventListener("click", () => dlg.close());
   $("cmp").addEventListener("change", (e) => openRun(file, e.target.value || null));
-  location.hash = "run=" + encodeURIComponent(file) + (cmpFile ? "&cmp=" + encodeURIComponent(cmpFile) : "");
+  writeHash("run=" + encodeURIComponent(file) + (cmpFile ? "&cmp=" + encodeURIComponent(cmpFile) : ""));
 }
 
 // ------------------------------------------------------------------ общее
+// адрес страницы повторяет вкладку, пару и открытый прогон: ссылкой можно поделиться, «Назад» возвращает
+let ownHash = null; // хэш, который записала сама страница: его hashchange — не переход
+function writeHash(h) {
+  ownHash = h ? "#" + h : "";
+  location.hash = h;
+}
+
 function saveHash() {
-  location.hash = state.tab === "pair" ? `pair=${state.src}-${state.tgt}` : "";
+  writeHash(state.tab === "pair" ? `pair=${state.src}-${state.tgt}` : "");
+}
+
+// «Назад», «Вперёд» или ссылка с другим хэшем на уже открытой странице
+function onHashChange() {
+  if (location.hash === ownHash) return;
+  ownHash = null;
+  const q = readHash();
+  if (q.get("run")) return openRun(q.get("run"), q.get("cmp"));
+  if (!q.get("pair")) state.tab = "map";
+  if ($("run").open) $("run").close();
+  renderPair();
+  setTab(state.tab);
 }
 
 function readHash() {
@@ -339,6 +358,7 @@ async function main() {
   });
   $("run").addEventListener("close", () => saveHash());
   if (q.get("run")) openRun(q.get("run"), q.get("cmp"));
+  window.addEventListener("hashchange", onHashChange);
 }
 
 main().catch((e) => { $("loading").textContent = "Error: " + e; });
