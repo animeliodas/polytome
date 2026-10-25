@@ -36,6 +36,14 @@ RU_MESSAGES = {
                      "Абзац в переводе:\n{tr}\n\nФрагмент, о котором спрашивают: «{frag}»\n\nВопрос читателя: {q}"),
     "explain_default_q": "Объясни непонятные слова, имена, термины и выражения в этом фрагменте.",
     "anonymous_author": "Автор неизвестен",
+    "meta_system": ("Ты переводишь с {src} языка на русский строку для обложки книги и карточки в библиотеке: {what} "
+                    "Это не текст главы и не заголовок главы: никаких «Глава N». "
+                    "Ответ — только перевод, одной строкой, в формате «[1] перевод»."),
+    "meta_title": "название книги. Переведи его так, как его напечатали бы на обложке русского издания.",
+    "meta_author": ("имя автора — имя или псевдоним человека. Передай его как имя, по принятой в русском "
+                    "транскрипции{note}, а не переводи по смыслу. Цифры и числительные в имени — часть имени: "
+                    "передай их чтение как имя (японское 五十六 читается Исороку), а не числом."),
+    "meta_anonymous": "пометка «автор неизвестен» вместо имени автора. Переведи её смысл.",
     "hint_full": "Переведи абзац ПОЛНОСТЬЮ, ничего не сокращая и не пропуская.",
     "hint_script_zh": ("Убери все иероглифы и китайские скобки/кавычки: всё должно быть по-русски, "
                        "диалоги — через тире, названия — в «ёлочках»."),
@@ -178,19 +186,30 @@ class Prompts:
     def _en(self, tpl: str, **kw) -> str:
         return tpl.format(src=self.pair.src.name, tgt=self.pair.tgt.name, **kw)
 
+    def _ru_names_note(self) -> str:
+        return {"zh": " (китайские — по Палладию)", "ja": " (японские — по Поливанову)",
+                "ko": " (корейские — по Концевичу)"}.get(self.pair.src.code, "")
+
     # ---------- main prompts ----------
     def translator(self) -> str:
         if self.ru:
             if self.zh:
                 return RU.TRANSLATOR_BASE.format(src=self._ru_src())
-            note = (" (японские — по Поливанову)" if self.pair.src.code == "ja"
-                    else " (корейские — по Концевичу)" if self.pair.src.code == "ko" else "")
-            return RU_TRANSLATOR_GENERIC.format(src=self._ru_src(), names_note=note)
+            return RU_TRANSLATOR_GENERIC.format(src=self._ru_src(), names_note=self._ru_names_note())
         dialogue = " Convert 「」『』 quotes into the dialogue punctuation of the target language." \
             if self.pair.src.cjk and not self.pair.tgt.cjk else ""
         example = CHAPTER_EXAMPLES.get(self.pair.tgt.code, f"Chapter 12: … (in {self.pair.tgt.name})")
         return self._en(EN.TRANSLATOR, names_rule=_names_rule(self.pair), dialogue_rule=dialogue,
                         chapter_example=example)
+
+    def meta(self, kind: str) -> str:
+        """Название или автор для обложки (kind: title | author | anonymous) — не абзац главы: без правил о
+        заголовке главы и о числах цифрами."""
+        if self.ru:
+            return self.m("meta_system", src=self._ru_src(), what=self.m(f"meta_{kind}", note=self._ru_names_note()))
+        tgt = self.pair.tgt.name
+        return self.m("meta_system", src=self.pair.src.name, tgt=tgt,
+                      what=self.m(f"meta_{kind}", tgt=tgt, names=_names_hint(self.pair)))
 
     @property
     def format_rules(self) -> str:

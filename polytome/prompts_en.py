@@ -171,6 +171,14 @@ MESSAGES = {
                      "Paragraph in translation:\n{tr}\n\nThe passage asked about: «{frag}»\n\nReader's question: {q}"),
     "explain_default_q": "Explain unclear words, names, terms and expressions in this passage.",
     "anonymous_author": "Unknown author",
+    "meta_system": ("You translate from {src} into {tgt} a line for a book's cover and its library card: {what} "
+                    "It is not chapter text and not a chapter heading: no \"Chapter N\". "
+                    "Answer with the translation only, on one line, as \"[1] translation\"."),
+    "meta_title": "the title of the book. Translate it the way a {tgt} edition would print it on the cover.",
+    "meta_author": ("the author's name — a person's name or pen name. Render it as a name ({names}), do not "
+                    "translate its meaning. Digits and numerals in a name are part of the name: render their reading "
+                    "as a name (Japanese 五十六 reads Isoroku), not as a number."),
+    "meta_anonymous": "a note saying the author is unknown, in place of the author's name. Translate its meaning.",
     "hint_full": "Translate the paragraph IN FULL, without shortening or skipping anything.",
     "hint_script": "Remove every leftover character of the original: everything must be in {tgt}.",
     "hint_gender": ("Gender error: {msg}. Fix the gender of pronouns and agreement referring to this character "

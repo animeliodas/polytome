@@ -18,6 +18,7 @@ from .i18n import _
 from .checks import (check_chapter, check_segment, glossary_stems, han_count, normalize_numbers,
                      normalize_punct)
 from .config import Config, ModelRef
+from .formats import CHAPTER_RE, CHAPTER_WORDS
 from .glossary import Glossary
 from .llm import LLMClient, LLMError
 from .palladius import transcribe
@@ -26,6 +27,9 @@ from .workspace import Workspace, atomic_write, read_json
 
 _THINK = re.compile(r"<think>.*?</think>", re.S)
 _LINE = re.compile(r"^\s*\[(\d+)\]\s?(.*)$")
+# Заголовок главы в начале строки для обложки: «Глава 0. …», «Chapter 0: …», «第0章 …».
+_COVER_HEADING = re.compile(r"^\s*(?:(?:" + CHAPTER_WORDS + r")\s*\d+|第\s*\d+\s*[章話]|제\s*\d+\s*[장화])\s*[.:：—–-]?\s*",
+                            re.I)
 _PLACE_SUFFIX = set("市省县縣村镇鎮山河湖江路街区區州府城国國岛島")
 # Должности и обращения после фамилии: 余經理 → «управляющий Юй», 葉少 → «молодой господин Е».
 _TITLE_SUFFIXES = ("經理", "经理", "總", "总", "董", "少", "少爺", "少爷", "哥", "姐", "弟", "妹", "叔", "嬸", "婶",
@@ -541,6 +545,13 @@ class Engine:
         self.job_id = prev["id"] if resume else time.strftime("%Y%m%d-%H%M%S")
         job = (dict(prev) if resume else {"id": self.job_id, "chapters": list(chapters), "retranslate": retranslate,
                                          "review": review, "done": [], "failed": [], "profile": self.cfg.profile_name})
+        if resume:
+            # В задаче — только то, что просили сейчас. Иначе чтение наперёд (гл. 3) при старой прерванной задаче
+            # 1–30 сохранилось бы как 1–30, и после обрыва resume перевёл бы главы, которых никто не просил.
+            want = set(chapters)
+            job.update({"chapters": list(chapters), "review": review, "profile": self.cfg.profile_name,
+                        "done": [n for n in job.get("done", []) if n in want],
+                        "failed": [n for n in job.get("failed", []) if n in want]})
         job.update({"status": "running", "phase": "translate", "pid": os.getpid(), "started_at": job.get("started_at") or
                     time.strftime("%Y-%m-%d %H:%M:%S"), "in_progress": []})
         job.pop("remaining", None)
@@ -713,34 +724,69 @@ class Engine:
         changed = False
         tk, ak = f"title_{self.pair.tgt.code}", f"author_{self.pair.tgt.code}"
         orig = ws.meta.get("original_title") or ws.meta.get("title", "")
+        au = ws.meta.get("author", "").strip()
+        # Сохранённое прежней версией «Глава 0. 56» — не перевод: убрать и перевести заново.
+        for key, src, kind in ((tk, orig, "title"), (ak, au, "author")):
+            if ws.meta.get(key) and src and self._cover_line(src, ws.meta[key], kind) != ws.meta[key]:
+                ws.meta.pop(key)
+                changed = True
         if not ws.meta.get(tk) and orig and self.pair.src.code != self.pair.tgt.code and (
                 han_count(orig) or ws.meta.get("source_file")):
             # только настоящий перевод: при сбое — ничего, следующий запуск попробует снова (а не «[НЕ ПЕРЕВЕДЕНО] …»)
-            title = self._quiet_translate(orig)
+            title = self._quiet_translate(orig, "title")
             if title:
                 ws.meta[tk] = title
                 changed = True
-        au = ws.meta.get("author", "").strip()
         if not ws.meta.get(ak) and au and self.pair.src.code != self.pair.tgt.code:
             if au in ANONYMOUS_AUTHORS:  # «佚名» — не имя, а «автор неизвестен»
-                ws.meta[ak] = self.P.m("anonymous_author") if self.P.ru else self._quiet_translate(au)
+                ws.meta[ak] = self.P.m("anonymous_author") if self.P.ru else self._quiet_translate(au, "anonymous")
             elif 2 <= han_count(au) <= 4 and self.translit(au, "person"):
                 ws.meta[ak] = self.translit(au, "person")
             else:
-                ws.meta[ak] = self._quiet_translate(au)
+                ws.meta[ak] = self._quiet_translate(au, "author")
             changed = bool(ws.meta.get(ak)) or changed
             if not ws.meta.get(ak):
                 ws.meta.pop(ak, None)
         if changed:
             ws.save_meta()
 
-    def _quiet_translate(self, text: str) -> str:
-        """Короткая строка (название, автор): перевод или "" — если модель не ответила."""
-        try:
-            tr = self.translate_lines([text.strip()])[0]
-        except LLMError:
+    def _quiet_translate(self, text: str, kind: str) -> str:
+        """Название или автор для обложки (kind: title | author | anonymous): перевод или "" — если модель не
+        ответила или ответила не тем. Отдельным запросом, а не через translate_lines: там строка — «первый абзац
+        главы 0» под правилами «заголовок главы → Глава N. Название» и «числа — цифрами», и автор 五十六
+        становился «Глава 0. 56»."""
+        text = text.strip()
+        entries = self.gl.relevant(text)
+        system = self.P.meta(kind)
+        if entries:
+            system += "\n\n" + self.P.m("glossary_header") + self._glossary_text(entries)
+        msgs = [{"role": "system", "content": system}, {"role": "user", "content": f"[1] {text}"}]
+        for attempt in range(2):
+            try:
+                res = self.llm.chat(self._translator(attempt), msgs, temperature=self.temperature, max_tokens=3000,
+                                    role="translator")
+            except LLMError:
+                return ""
+            lines = [ln.strip() for ln in strip_think(res.content).splitlines() if ln.strip()]
+            got = parse_numbered(res.content, [1])
+            tr = got.get(1, "") if got else (lines[0] if len(lines) == 1 else "")
+            tr = self._cover_line(text, tr.strip().strip("«»\"").strip(), kind)
+            if tr:
+                return tr
+        return ""
+
+    def _cover_line(self, src: str, tr: str, kind: str) -> str:
+        """Ответ модели для обложки → годная строка или "". Заголовок главы, которого нет в оригинале, срезается
+        («Глава 0. Исороку» → «Исороку»); автор цифрами при оригинале без цифр — число, а не имя (五十六 → «56»),
+        автор с письмом оригинала — не транскрибирован."""
+        if not CHAPTER_RE.match(src):
+            tr = _COVER_HEADING.sub("", tr, count=1).strip()
+        if kind != "author" or not tr:
+            return tr
+        if re.search(r"\d", tr) and not re.search(r"\d", src):
             return ""
-        return (tr or "").strip().strip("«»\"")
+        left = self.pair.leftover_re
+        return "" if left and left.search(tr) else tr
 
     def _bible_is_template(self) -> bool:
         b = self.ws.bible()

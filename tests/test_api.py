@@ -241,6 +241,72 @@ def test_translate_meta():
     assert h.translate_meta(book)["toc_translated"] == 0  # уже переведённое не переводится заново
 
 
+def test_author_is_a_name_not_a_chapter():
+    """Автор 五十六 (ヒイロ回顧録, ja→ru) стал «Глава 0. 56»: автор шёл как «первый абзац главы 0» под правилом
+    «заголовок главы → Глава N. Название» и «числа — цифрами». Теперь — отдельный запрос «имя автора»; ответ
+    заголовком главы или числом не сохраняется."""
+    import re
+    import httpx
+    from polytome.workspace import Workspace
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "hiiro.txt").write_text("第1話 はじまり\nヒイロは笑った。\n", encoding="utf-8")
+    names = {"ru": {"五十六": "Исороку", "ヒイロ回顧録": "Мемуары Хийро"},
+             "en": {"五十六": "Isoroku", "ヒイロ回顧録": "Hiiro's Memoirs"}}
+    seen = []
+
+    def model(req):
+        """Модель, которая слушается промта: строка «главы 0» под правилом о заголовке главы → заголовок главы."""
+        msgs = json.loads(req.content)["messages"]
+        system, user = msgs[0]["content"], msgs[-1]["content"]
+        seen.append(system + "\n" + user)
+        tgt = "ru" if "на русский" in system else "en"
+        heading_rule = "«Глава N. Название»" in system or "Chapter heading" in system
+        out = []
+        for m in (re.match(r"^\[(\d+)\] (.*)$", ln) for ln in user.split("\n")):
+            if m:
+                tr = names[tgt].get(m.group(2).strip(), "X")
+                if heading_rule and re.search(r"главы 0|chapter 0", user):
+                    tr = ("Глава 0. " if tgt == "ru" else "Chapter 0: ") + ("56" if m.group(2) == "五十六" else tr)
+                out.append(f"[{m.group(1)}] {tr}")
+        return httpx.Response(200, json={"choices": [{"message": {"content": "\n".join(out)}, "finish_reason": "stop"}],
+                                         "usage": {}})
+
+    for tgt in ("ru", "en"):
+        h = Polytome(CONFIG, home=tmp / f"home-{tgt}")
+        book = h.import_book(tmp / "hiiro.txt")["path"]
+        ws = Workspace(book)
+        ws.meta.update({"source_lang": "ja", "target_lang": tgt, "original_title": "ヒイロ回顧録", "author": "五十六"})
+        ws.save_meta()
+        h.llm.http = httpx.Client(transport=httpx.MockTransport(model))
+        seen.clear()
+        info = h.translate_meta(book, toc=False)
+        assert info["author"] == names[tgt]["五十六"], (tgt, info)
+        assert info["title"] == names[tgt]["ヒイロ回顧録"], (tgt, info)
+        assert len(seen) == 2 and not any(re.search(r"главы 0|chapter 0", s) for s in seen), seen
+        assert ("Поливанову" if tgt == "ru" else "Hepburn") in seen[-1], seen[-1]
+
+        # Модель всё равно отвечает заголовком главы: «Глава 0. 56» — не имя, не сохраняется (повтор в следующий
+        # раз), а «Глава 0. Исороку» — имя под лишним заголовком: заголовок срезается.
+        for answer, want in (("56", None), (names[tgt]["五十六"], names[tgt]["五十六"])):
+            ws = Workspace(book)
+            ws.meta.pop(f"author_{tgt}", None)
+            ws.save_meta()
+            head = "Глава 0. " if tgt == "ru" else "Chapter 0: "
+            h.llm.http = httpx.Client(transport=httpx.MockTransport(lambda req, a=head + answer: httpx.Response(
+                200, json={"choices": [{"message": {"content": f"[1] {a}"}, "finish_reason": "stop"}], "usage": {}})))
+            h.translate_meta(book, toc=False)
+            assert Workspace(book).meta.get(f"author_{tgt}") == want, (tgt, answer, Workspace(book).meta)
+            assert h.book_info(book)["author"] == (want or "五十六")
+
+        # Книга, где прежняя версия уже сохранила заголовок главы: следующий запуск переводит заново.
+        ws = Workspace(book)
+        ws.meta.update({f"author_{tgt}": head + "56", f"title_{tgt}": head + names[tgt]["ヒイロ回顧録"]})
+        ws.save_meta()
+        h.llm.http = httpx.Client(transport=httpx.MockTransport(model))
+        info = h.translate_meta(book, toc=False)
+        assert (info["author"], info["title"]) == (names[tgt]["五十六"], names[tgt]["ヒイロ回顧録"]), (tgt, info)
+
+
 def test_bench():
     """Замер модели: одинаковый набор, качество — проверками кода; результат без ключей; таблица по результатам."""
     import re
@@ -520,6 +586,79 @@ def test_offline_job_does_not_block_retry():
             assert Workspace(book).load_job()["status"] != "running", Workspace(book).load_job()
     finally:
         llm_mod.time.sleep = sleep
+        api_mod.LLMClient = real_client
+
+
+def test_resume_only_requested_chapters():
+    """Чтение наперёд (гл. 3) при старой прерванной задаче 1–4 сохраняется как задача из одной гл. 3: если
+    приложение убьют, resume() доделает только её, а не всю старую задачу. Настоящий resume (те же главы)
+    продолжает старую задачу с места остановки."""
+    import os
+    import re
+    import httpx
+    from polytome import api as api_mod
+    from polytome.workspace import Workspace
+    tmp = Path(tempfile.mkdtemp())
+    h = Polytome(CONFIG, home=tmp / "home")
+    txt = tmp / "four.txt"
+    txt.write_text("".join(f"第{c}章 路\n他走了。\n" for c in "一二三四"), encoding="utf-8")
+    book = h.import_book(txt)["path"]
+    assert list(Workspace(book).chapters()) == [1, 2, 3, 4]
+
+    def reply(req):
+        body = json.loads(req.content)
+        if body.get("response_format"):  # извлечение терминов
+            content = json.dumps({"terms": []})
+        else:
+            user = body["messages"][-1]["content"]
+            content = "\n".join(f"[{m.group(1)}] Он ушёл." for m in re.finditer(r"^\[(\d+)\] ", user, re.M))
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}, "finish_reason": "stop"}],
+                                         "usage": {}})
+
+    real_client = api_mod.LLMClient
+
+    def mock_client(parallel):  # у задачи перевода свой клиент
+        c = real_client(parallel)
+        c.http = httpx.Client(transport=httpx.MockTransport(reply))
+        return c
+
+    started, on_disk = [], []
+
+    def on_event(e):
+        if e["ev"] == "chapter_start":
+            started.append(e["n"])
+            on_disk.append(Workspace(book).load_job())  # таким job.json останется, если процесс убьют посреди главы
+
+    old = {"id": "old", "chapters": [1, 2, 3, 4], "retranslate": False, "review": False, "done": [], "failed": [],
+           "profile": "economy", "status": "cancelled"}
+    api_mod.LLMClient = mock_client
+    try:
+        Workspace(book).save_job(dict(old))
+        r = h.translate(book, [3], review=False, prepare=False, on_event=on_event)
+        assert started == [3] and r["translated"] == "3", (started, r)
+        assert on_disk[0]["chapters"] == [3] and on_disk[0]["status"] == "running", on_disk[0]
+        assert Workspace(book).load_job()["chapters"] == [3]
+        assert h.resume(book) == {"nothing_to_resume": True}
+
+        # приложение убили посреди гл. 3: на диске job.json того момента, а главы ещё нет
+        ws = Workspace(book)
+        ws.target_path(3).unlink()
+        ws.state_path(3).unlink(missing_ok=True)
+        ws.save_job({**on_disk[0], "pid": os.getpid()})
+        started.clear()
+        r = h.resume(book, on_event=on_event)
+        assert started == [3] and r["translated"] == "3", (started, r)
+        assert not any(Workspace(book).is_translated(n) for n in (1, 2, 4))
+
+        # настоящий resume: та же задача 1–4, гл. 3 уже готова — переводятся только 1, 2, 4
+        Workspace(book).save_job({**old, "id": "old2", "done": [3]})
+        started.clear()
+        r = h.resume(book, on_event=on_event)
+        assert sorted(started) == [1, 2, 4] and r.get("resumed_job") == "old2", (started, r)
+        job = Workspace(book).load_job()
+        assert job["id"] == "old2" and job["chapters"] == [1, 2, 3, 4] and job["status"] == "done", job
+        assert sorted(job["done"]) == [1, 2, 3, 4], job
+    finally:
         api_mod.LLMClient = real_client
 
 
