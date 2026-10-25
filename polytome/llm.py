@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import random
+import socket
 import threading
 import time
 from dataclasses import dataclass, field
@@ -98,13 +99,34 @@ class AdaptivePool:
             self.cv.notify_all()
 
 
+def keepalive_options() -> list[tuple[int, int, int]]:
+    """TCP keepalive для соединений с провайдером. Ответ без стриминга приходит целиком, когда модель допишет главу,
+    а до тех пор соединение молчит минутами. Мобильные операторы такие соединения тихо обрывают (NAT забывает
+    их через несколько минут), и запрос висел до таймаута в 10 минут, потом снова — так одна глава могла стоять
+    часами. Пробы каждые 10 с после 20 с тишины держат соединение живым, а мёртвое замечается примерно за минуту."""
+    opts = [(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)]
+    idle = getattr(socket, "TCP_KEEPIDLE", None) or getattr(socket, "TCP_KEEPALIVE", None)  # macOS: TCP_KEEPALIVE
+    for opt, value in ((idle, 20), (getattr(socket, "TCP_KEEPINTVL", None), 10), (getattr(socket, "TCP_KEEPCNT", None), 4)):
+        if opt is not None:
+            opts.append((socket.IPPROTO_TCP, opt, value))
+    return opts
+
+
 class LLMClient:
+    READ_TIMEOUT_ATTEMPTS = 2  # модель молчала все 10 минут — ещё одна попытка, не шесть (не держать задачу час)
+    # Провайдер недоступен (нет сети, сервер лежит): один запрос исчерпал все попытки на ошибках соединения — дальше
+    # каждый запрос к нему пробует один раз, пока какой-нибудь не пройдёт. Иначе без сети каждый абзац сжигал бы
+    # полный цикл повторов, и глава «падала» бы десятки минут вместо пары.
+    DOWN_FOR_S = 60
+
     def __init__(self, parallel: int = 8):
+        limits = httpx.Limits(max_connections=64, max_keepalive_connections=32)
         self.http = httpx.Client(timeout=httpx.Timeout(600, connect=30),
-                                 limits=httpx.Limits(max_connections=64, max_keepalive_connections=32))
+                                 transport=httpx.HTTPTransport(limits=limits, socket_options=keepalive_options()))
         self.pool = AdaptivePool(start=max(2, parallel // 2), maximum=parallel)
         self.usage = Usage()
         self.max_retries = 6
+        self.down_until: dict[str, float] = {}  # base_url → до какого времени провайдер считается недоступным
 
     def chat(self, ref: ModelRef, messages: list[dict], *, tools: list[dict] | None = None,
              temperature: float | None = None, max_tokens: int | None = None,
@@ -126,7 +148,9 @@ class LLMClient:
         url = f"{ref.base_url}/chat/completions"
 
         last_err: Exception | None = None
-        for attempt in range(1, self.max_retries + 1):
+        read_timeouts = 0
+        tries = 1 if time.time() < self.down_until.get(ref.base_url, 0) else self.max_retries
+        for attempt in range(1, tries + 1):
             if use_pool:
                 self.pool.acquire()
             ok = rate_limited = False
@@ -142,6 +166,8 @@ class LLMClient:
                 res = self._parse(data, ref)
                 res.seconds = time.time() - t0
                 ok = True
+                self.down_until.pop(ref.base_url, None)  # провайдер снова отвечает
+                tries = self.max_retries
                 self.usage.add(role, res)
                 # Рассуждающая модель съела весь лимит на «мысли» и не ответила — повтор с low и бо́льшим лимитом.
                 if (not res.content.strip() and not res.tool_calls and res.finish_reason == "length"
@@ -157,12 +183,17 @@ class LLMClient:
                     raise  # ошибка запроса — повтор не поможет
             except (httpx.TimeoutException, httpx.TransportError, json.JSONDecodeError) as e:
                 last_err = e
+                read_timeouts += isinstance(e, httpx.ReadTimeout)
             finally:
                 if use_pool:
                     self.pool.release(ok, rate_limited)
+            if read_timeouts >= self.READ_TIMEOUT_ATTEMPTS or attempt == tries:
+                break  # после последней попытки не ждать минуту впустую
             delay = min(60.0, (2 ** attempt) + random.random() * 2)
             time.sleep(delay)
-        raise LLMError(_("{0}: не удалось после {1} попыток: {2}").format(ref.spec, self.max_retries, last_err))
+        if isinstance(last_err, httpx.TransportError):  # соединение, а не ответ сервера — провайдер недоступен
+            self.down_until[ref.base_url] = time.time() + self.DOWN_FOR_S
+        raise LLMError(_("{0}: не удалось после {1} попыток: {2}").format(ref.spec, attempt, last_err))
 
     @staticmethod
     def _parse(data: dict, ref: ModelRef) -> ChatResult:

@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 from pathlib import Path
@@ -294,7 +295,9 @@ class Polytome:
             if key in self._active:
                 raise PolytomeError(_("Для этой книги уже идёт перевод"))
             job = eng.ws.load_job() or {}
-            if job.get("status") in ("running", "starting") and job_status(key).get("job", {}).get("alive"):
+            # «running» с нашим же pid, но без активной задачи — след упавшего прошлого запуска, а не чужой процесс
+            if (job.get("status") in ("running", "starting") and job.get("pid") != os.getpid()
+                    and job_status(key).get("job", {}).get("alive")):
                 raise PolytomeError(_("Эту книгу уже переводит другой процесс (polytome CLI / Hermes)"))
             self._active[key] = eng
 
@@ -306,6 +309,7 @@ class Polytome:
                 self._emit(key, {"ev": "job_done", "report": _brief(r)}, on_event)
                 return r
             except Exception as e:  # noqa: BLE001
+                _mark_failed(eng.ws, e)
                 self._emit(key, {"ev": "job_error", "error": f"{type(e).__name__}: {e}"}, on_event)
                 raise
             finally:
@@ -494,7 +498,20 @@ def _nth(items: list | None, i: int) -> str:
 def _brief(r: dict) -> dict:
     keys = ("translated", "failed", "skipped", "cancelled", "HALTED", "hard_issues_total", "review_fixes_total",
             "seconds", "tokens", "note", "export")
-    return {k: r[k] for k in keys if k in r}
+    b = {k: r[k] for k in keys if k in r}
+    errors = [c["error"] for c in r.get("chapters") or [] if c.get("error")]
+    if r.get("failed") and errors:
+        b["failed_error"] = str(errors[0])[:300]  # почему главы не перевелись — приложению для сообщения
+    return b
+
+
+def _mark_failed(ws: Workspace, err: Exception):
+    """Задача упала с исключением (например, нет сети при подготовке книги): job.json не должен остаться «running» —
+    иначе следующий запуск счёл бы, что книгу переводит другой процесс, а resume не нашёл бы прерванную задачу."""
+    job = ws.load_job() or {}
+    if job.get("status") in ("running", "starting") and job.get("pid") == os.getpid():
+        job.update({"status": "failed", "halt_reason": f"{type(err).__name__}: {err}"[:300], "in_progress": []})
+        ws.save_job(job)
 
 
 def _swallow(fn):

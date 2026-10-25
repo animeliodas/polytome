@@ -715,11 +715,11 @@ class Engine:
         orig = ws.meta.get("original_title") or ws.meta.get("title", "")
         if not ws.meta.get(tk) and orig and self.pair.src.code != self.pair.tgt.code and (
                 han_count(orig) or ws.meta.get("source_file")):
-            try:
-                ws.meta[tk] = self.translate_text(orig).strip().strip("«»\"") or orig
+            # только настоящий перевод: при сбое — ничего, следующий запуск попробует снова (а не «[НЕ ПЕРЕВЕДЕНО] …»)
+            title = self._quiet_translate(orig)
+            if title:
+                ws.meta[tk] = title
                 changed = True
-            except LLMError:
-                pass
         au = ws.meta.get("author", "").strip()
         if not ws.meta.get(ak) and au and self.pair.src.code != self.pair.tgt.code:
             if au in ANONYMOUS_AUTHORS:  # «佚名» — не имя, а «автор неизвестен»
@@ -735,10 +735,12 @@ class Engine:
             ws.save_meta()
 
     def _quiet_translate(self, text: str) -> str:
+        """Короткая строка (название, автор): перевод или "" — если модель не ответила."""
         try:
-            return self.translate_text(text).strip().strip("«»\"")
+            tr = self.translate_lines([text.strip()])[0]
         except LLMError:
             return ""
+        return (tr or "").strip().strip("«»\"")
 
     def _bible_is_template(self) -> bool:
         b = self.ws.bible()

@@ -159,6 +159,113 @@ def test_cleanup_then_edit_keeps_lines_removed():
     assert out == ["Глава 1", "Он громко засмеялся.", "Она заплакала."], out
 
 
+
+def _silent_server():
+    """Сервер, который принимает соединения и молчит (модель «думает», а связь оборвалась)."""
+    import socket
+    import threading
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen()
+    conns = []
+
+    def accept():
+        while True:
+            try:
+                conns.append(srv.accept()[0])
+            except OSError:
+                return
+    threading.Thread(target=accept, daemon=True).start()
+    return srv, conns
+
+
+def test_llm_keepalive_and_silent_provider():
+    """Соединения с провайдером — с TCP keepalive; молчащий провайдер — две попытки, а не шесть по 10 минут."""
+    import socket
+    import httpx
+    from polytome import llm
+    from polytome.config import ModelRef
+
+    class Ok(__import__("http.server").server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            body = b'{"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]}'
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    import http.server
+    import threading
+    ok = http.server.HTTPServer(("127.0.0.1", 0), Ok)
+    threading.Thread(target=ok.serve_forever, daemon=True).start()
+    client = llm.LLMClient(parallel=2)
+    try:
+        with client.http.stream("POST", f"http://127.0.0.1:{ok.server_port}/v1/chat/completions", json={}) as r:
+            sock = r.extensions["network_stream"].get_extra_info("socket")
+            assert sock.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE), "keepalive не включён"
+    finally:
+        ok.shutdown()
+
+    srv, conns = _silent_server()
+    client.http.timeout = httpx.Timeout(0.3, connect=2)
+    sleep, llm.time.sleep = llm.time.sleep, lambda s: None
+    try:
+        ref = ModelRef("t", "m", f"http://127.0.0.1:{srv.getsockname()[1]}/v1", None)
+        try:
+            client.chat(ref, [{"role": "user", "content": "x"}])
+            raise AssertionError("молчащий провайдер не дал ошибку")
+        except llm.LLMError as e:
+            assert "2" in str(e), e
+        assert len(conns) == llm.LLMClient.READ_TIMEOUT_ATTEMPTS, f"попыток: {len(conns)}"
+    finally:
+        llm.time.sleep = sleep
+        srv.close()
+
+
+
+def test_llm_provider_down_fails_fast():
+    """Провайдер недоступен: первый запрос — все попытки, следующие — по одной, пока какой-то не пройдёт."""
+    import httpx
+    from polytome import llm
+    from polytome.config import ModelRef
+    state = {"up": False, "calls": 0}
+
+    def reply(req):
+        state["calls"] += 1
+        if not state["up"]:
+            raise httpx.ConnectError("нет сети", request=req)
+        return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]})
+
+    client = llm.LLMClient(parallel=2)
+    client.http = httpx.Client(transport=httpx.MockTransport(reply))
+    ref = ModelRef("t", "m", "http://provider.test/v1", None)
+    msgs = [{"role": "user", "content": "x"}]
+    sleep, llm.time.sleep = llm.time.sleep, lambda s: None
+    try:
+        for expected in (client.max_retries, 1, 1):
+            state["calls"] = 0
+            try:
+                client.chat(ref, msgs)
+                raise AssertionError("без сети запрос прошёл")
+            except llm.LLMError:
+                pass
+            assert state["calls"] == expected, (expected, state["calls"])
+        state["up"] = True
+        assert client.chat(ref, msgs).content == "ok"  # сеть вернулась — одна попытка прошла
+        state["up"], state["calls"] = False, 0
+        try:
+            client.chat(ref, msgs)
+        except llm.LLMError:
+            pass
+        assert state["calls"] == client.max_retries, state  # после успеха — снова полный цикл повторов
+    finally:
+        llm.time.sleep = sleep
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in list(globals().items()):

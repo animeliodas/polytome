@@ -2,7 +2,7 @@
 
 Для встраивания в приложения: `from polytome import Polytome` (см. polytome/api.py и docs/INTEGRATION.md).
 """
-__version__ = "0.7.0"
+__version__ = "0.7.1"
 
 
 def __getattr__(name):  # ленивый импорт: `import polytome` не тянет движок и httpx, пока API не нужен

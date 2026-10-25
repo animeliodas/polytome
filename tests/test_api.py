@@ -466,6 +466,63 @@ def test_truncated_answer_retried():
     assert len(calls) == 2 and calls[1] == [segs[-1]["id"]], calls
 
 
+
+def test_failed_chapters_in_job_report():
+    """Главы, которые не перевелись, — в отчёте job_done вместе с причиной: приложение не скажет «готово»."""
+    from polytome.api import _brief
+    r = {"translated": "1", "failed": [2], "skipped": "", "seconds": 3.0,
+         "chapters": [{"chapter": 1, "complete": True},
+                      {"chapter": 2, "complete": False, "error": "LLMError: не удалось после 6 попыток: ConnectError"}]}
+    b = _brief(r)
+    assert b["failed"] == [2] and "ConnectError" in b["failed_error"], b
+    assert "failed_error" not in _brief({"translated": "1-2", "failed": [], "chapters": []})
+
+
+
+def test_offline_job_does_not_block_retry():
+    """Нет сети: задача падает, но job.json не остаётся «running» — повтор в том же процессе не принимается за
+    «другой процесс»; название при этом не превращается в «[НЕ ПЕРЕВЕДЕНО] …»."""
+    import httpx
+    from polytome import llm as llm_mod
+    from polytome.workspace import Workspace
+    tmp = Path(tempfile.mkdtemp())
+    h = Polytome(CONFIG, home=tmp / "home")
+    book = h.import_book(_novel(tmp))["path"]
+    calls = {"n": 0}
+
+    def offline(req):
+        calls["n"] += 1
+        raise httpx.ConnectError("нет сети", request=req)
+
+    h.llm.http = httpx.Client(transport=httpx.MockTransport(offline))
+    from polytome import api as api_mod
+    real_client = api_mod.LLMClient
+
+    def offline_client(parallel):  # у задачи перевода свой клиент — и он без сети
+        c = real_client(parallel)
+        c.http = httpx.Client(transport=httpx.MockTransport(offline))
+        return c
+    api_mod.LLMClient = offline_client
+    sleep, llm_mod.time.sleep = llm_mod.time.sleep, lambda s: None
+    try:
+        h.translate_meta(book)
+        meta = json.dumps(Workspace(book).meta, ensure_ascii=False)
+        assert "ПЕРЕВЕДЕНО" not in meta and "TRANSLATED" not in meta, meta
+        for attempt in (1, 2):
+            calls["n"] = 0
+            try:
+                h.translate(book, [1])
+            except PolytomeError as e:
+                raise AssertionError(f"попытка {attempt}: {e}")
+            except Exception:  # noqa: BLE001 — ошибка провайдера ожидаема
+                pass
+            assert calls["n"] > 0, f"попытка {attempt} не дошла до провайдера"
+            assert Workspace(book).load_job()["status"] != "running", Workspace(book).load_job()
+    finally:
+        llm_mod.time.sleep = sleep
+        api_mod.LLMClient = real_client
+
+
 if __name__ == "__main__":
     fails = 0
     for name, fn in list(globals().items()):
